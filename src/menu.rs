@@ -1,6 +1,5 @@
 use crate::global;
 use crate::nvs;
-use crate::panel;
 use embassy_time::{Duration, Timer};
 use esp_idf_svc::hal::i2c::*;
 // use esp_idf_svc::hal::task;
@@ -105,7 +104,7 @@ pub async fn menu_loop(
             draw_text(
                 disp,
                 &format!(
-                    "Rusty HangulClock\n{}\nrotate knob to\nenter menu",
+                    "Rusty\nHangul\nClock\n{}\n\nrotate\nknob\nto\nenter menu",
                     time_str
                 ),
             )?;
@@ -141,7 +140,7 @@ pub async fn menu_loop(
 
                 draw_text(
                     disp,
-                    &format!("= {} =\n{}\npress to\ndecide", current_menu.as_str(), value),
+                    &format!("={}=\n\n{}\n\npress\nto\ndecide", current_menu.as_str(), value),
                 )?;
 
                 if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
@@ -219,7 +218,7 @@ pub async fn menu_loop(
                 draw_text(
                     disp,
                     &format!(
-                        "= MENU {}/{} =\n{}\npress to\ndecide",
+                        "=MENU {}/{}=\n\n{}\n\npress\nto\ndecide",
                         current_menu.index() + 1,
                         menu_len,
                         current_menu.as_str()
@@ -348,7 +347,7 @@ pub async fn menu_loop(
                                         info!("EXIT selected");
                                         draw_text(
                                             disp,
-                                            &format!("MENU {}/{}\n**EXIT**", current_menu.index() + 1, menu_len,),
+                                            &format!("MENU {}/{}\n\n**EXIT**", current_menu.index() + 1, menu_len,),
                                         )?;
                                         Timer::after(Duration::from_millis(1000)).await;
                                         *in_menu = false;
@@ -399,7 +398,7 @@ pub fn draw_text(disp: &mut Sh1106GM<I2cInterface<I2cDriver>>, text: &str) -> an
         .build();
 
     disp.clear();
-    Text::with_alignment(text, Point::new(128 / 2, 10), text_style, Alignment::Center)
+    Text::with_alignment(text, Point::new(64 / 2, 10), text_style, Alignment::Center)
         .draw(disp)?;
     disp.flush().unwrap();
     Ok(())
