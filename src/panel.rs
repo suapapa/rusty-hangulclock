@@ -192,11 +192,15 @@ impl<SPI: SpiBus> Sleds<SPI> {
 }
 
 fn remap(leds: Vec<u8>) -> Vec<u8> {
-    // 0~24 -> 24~0으로 매핑하는 테이블 생성
-    let mapping_from_bl_to_top: [u8; 25] = [
+    #[cfg(feature = "mapping_tr_to_left")]
+    const MAPPING: [u8; 25] = [
+        4, 3, 2, 1, 0, 5, 6, 7, 8, 9, 14, 13, 12, 11, 10, 15, 16, 17, 18, 19, 24, 23, 22, 21, 20,
+    ];
+    #[cfg(feature = "mapping_bl_to_top")]
+    const MAPPING: [u8; 25] = [
         4, 5, 14, 15, 24, 3, 6, 13, 16, 23, 2, 7, 12, 17, 22, 1, 8, 11, 18, 21, 0, 9, 10, 19, 20,
     ];
     leds.into_iter()
-        .map(|x| mapping_from_bl_to_top[x as usize])
+        .map(|x| MAPPING[x as usize])
         .collect()
 }

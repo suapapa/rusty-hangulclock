@@ -18,8 +18,10 @@ debug = true    # Symbols are nice and they don't increase the size on Flash
 opt-level = "z"
 
 [features]
-default = []
+default = ["mapping_tr_to_left"]
 use_dotstar = []
+mapping_tr_to_left = []
+mapping_bl_to_top = []
 
 experimental = ["esp-idf-svc/experimental"]
 
