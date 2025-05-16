@@ -6,9 +6,9 @@ flash_dotstar:
 	cargo espflash flash --release -T part.csv -M
 
 flash_neopixel:
-    @echo "Neopixel is experimental"
+    # @echo "Neopixel is experimental"
 	source ~/export-esp.sh
-	cargo espflash flash --no-default-features --features neopixel --release -T part.csv -M
+	cargo espflash flash --no-default-features --features neopixel,tr_to_left --release -T part.csv -M
 
 erase_nvs:
     # @echo "Erasing NVS..."

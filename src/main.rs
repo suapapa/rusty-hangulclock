@@ -69,11 +69,11 @@ fn main() -> anyhow::Result<()> {
     )?;
     let mut disp: Sh1106GM<_> = Sh1106Builder::new().connect_i2c(i2c).into();
     disp.init().unwrap();
-    disp.set_rotation(sh1106::prelude::DisplayRotation::Rotate270).unwrap();
+    disp.set_rotation(sh1106::prelude::DisplayRotation::Rotate90).unwrap();
     disp.flush().unwrap();
     menu::draw_text(
         &mut disp,
-        &format!("Rusty\nHangul\nClock\nno.7\n\ninit\n..."),
+        &format!("Rusty\nHangul\nClock\nno.8\n\ninit\n..."),
     )?;
 
     let mut spi_driver = SpiDriver::new(

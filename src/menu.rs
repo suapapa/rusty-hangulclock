@@ -251,7 +251,7 @@ pub async fn menu_loop(
                                                 draw_text(
                                                     disp,
                                                     &format!(
-                                                        "MENU {}/{}\n**WPS**\nwait a moment",
+                                                        "MENU {}/{}\n**WPS**\n\nwait\na\nmoment",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                     ),
@@ -295,7 +295,7 @@ pub async fn menu_loop(
                                                 draw_text(
                                                     disp,
                                                     &format!(
-                                                        "MENU {}/{}\n**NTP**\nwait a moment",
+                                                        "MENU {}/{}\n**NTP**\n\nwait\na\nmoment",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                     ),

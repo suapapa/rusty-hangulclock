@@ -1,9 +1,10 @@
 difference() {
     union() {
-        translate([-30,50,0]) oled_supports();
-        translate([30,50,0]) oled_supports_v();
-        translate([-30,-35,0]) board_supports();
-        translate([30,-35,0]) board_supports_2();
+        // translate([-30,50,0]) oled_supports();
+        // translate([-30,50,0]) oled_supports_v();
+        translate([-30,-35,0]) oled_supports_v();
+        #translate([30,-35,0]) board_supports();
+        // translate([30,-35,0]) board_supports_2();
         cube([170, 170, 1.2], center=true);
         translate([-170/6,0,1]) cube([5,170, 2.5], center=true);
         translate([+170/6,0,1]) cube([5,170, 2.5], center=true);
