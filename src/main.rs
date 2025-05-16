@@ -24,9 +24,9 @@ use sh1106::{prelude::GraphicsMode as Sh1106GM, Builder as Sh1106Builder};
 // use smart_leds::{gamma, hsv::hsv2rgb, hsv::Hsv, SmartLedsWrite, RGB8};
 use std::time;
 
-#[cfg(feature = "use_dotstar")]
+#[cfg(feature = "dotstar")]
 use apa102_spi::MODE as SPI_MODE;
-#[cfg(not(feature = "use_dotstar"))]
+#[cfg(feature = "neopixel")]
 use ws2812_spi::MODE as SPI_MODE;
 
 fn main() -> anyhow::Result<()> {
