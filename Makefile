@@ -3,12 +3,12 @@
 flash_dotstar:
     # @echo "Flashing for DotStar..."
 	source ~/export-esp.sh
-	cargo espflash flash --features "use_dotstar" --release -T part.csv -M
+	cargo espflash flash --features "ledstrip/dotstar" --release -T part.csv -M
 
 flash_neopixel:
-    # @echo "Flashing for NeoPixel..."
+    @echo "Neopixel is experimental"
 	source ~/export-esp.sh
-	cargo espflash flash --release -T part.csv -M
+	cargo espflash flash --features "ledstrip/neopixel" --release -T part.csv -M
 
 erase_nvs:
     # @echo "Erasing NVS..."

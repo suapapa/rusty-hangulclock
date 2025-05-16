@@ -1,6 +1,6 @@
-#[cfg(feature = "use_dotstar")]
+#[cfg(feature = "dotstar")]
 use apa102_spi::Apa102;
-#[cfg(not(feature = "use_dotstar"))]
+#[cfg(feature = "neopixel")]
 use ws2812_spi::Ws2812;
 
 use embedded_hal::spi::SpiBus;
@@ -14,12 +14,12 @@ use crate::nvs;
 const LED_NUM: usize = 25;
 // const DEFAULT_BRIGHTNESS: u8 = 100;
 
-#[cfg(feature = "use_dotstar")]
+#[cfg(feature = "dotstar")]
 pub struct Sleds<SPI> {
     sleds: Arc<Mutex<Apa102<SPI>>>,
 }
 
-#[cfg(not(feature = "use_dotstar"))]
+#[cfg(feature = "neopixel")]
 pub struct Sleds<SPI> {
     sleds: Arc<Mutex<Ws2812<SPI>>>,
 }
@@ -29,10 +29,10 @@ impl<SPI: SpiBus> Sleds<SPI> {
     where
         SPI: SpiBus,
     {
-        #[cfg(feature = "use_dotstar")]
+        #[cfg(feature = "dotstar")]
         let sleds = Apa102::new(spi_bus);
 
-        #[cfg(not(feature = "use_dotstar"))]
+        #[cfg(feature = "neopixel")]
         let sleds = Ws2812::new(spi_bus);
 
         Self {
@@ -192,11 +192,11 @@ impl<SPI: SpiBus> Sleds<SPI> {
 }
 
 fn remap(leds: Vec<u8>) -> Vec<u8> {
-    #[cfg(feature = "mapping_tr_to_left")]
+    #[cfg(feature = "tr_to_left")]
     const MAPPING: [u8; 25] = [
         4, 3, 2, 1, 0, 5, 6, 7, 8, 9, 14, 13, 12, 11, 10, 15, 16, 17, 18, 19, 24, 23, 22, 21, 20,
     ];
-    #[cfg(feature = "mapping_bl_to_top")]
+    #[cfg(feature = "bl_to_top")]
     const MAPPING: [u8; 25] = [
         4, 5, 14, 15, 24, 3, 6, 13, 16, 23, 2, 7, 12, 17, 22, 1, 8, 11, 18, 21, 0, 9, 10, 19, 20,
     ];

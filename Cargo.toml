@@ -18,10 +18,13 @@ debug = true    # Symbols are nice and they don't increase the size on Flash
 opt-level = "z"
 
 [features]
-default = ["mapping_tr_to_left"]
-use_dotstar = []
-mapping_tr_to_left = []
-mapping_bl_to_top = []
+default = ["mapping_leds/tr_to_left", "ledstrip/dotstar"]
+ledstrip = ["neopixel", "dotstar"]
+neopixel = []
+dotstar = []
+mapping_leds = ["tr_to_left", "bl_to_top"]
+tr_to_left = []
+bl_to_top = []
 
 experimental = ["esp-idf-svc/experimental"]
 
