@@ -1,5 +1,6 @@
 use crate::global;
 use crate::nvs;
+use crate::panel::LED_WRITE_LOCK;
 use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
@@ -74,18 +75,21 @@ const WPS_CONFIG: WpsConfig = WpsConfig {
     wps_type: WpsType::Pbc,
     factory_info: WpsFactoryInfo {
         manufacturer: "homin.dev",
-        model_number: "hangulclock202501",
-        model_name: "Rusty Hangul Clock",
-        device_name: "Rusty Hangul Clock",
+        model_number: "hangulclock202505",
+        model_name: "Rusty HangulClock",
+        device_name: "Rusty HangulClock",
     },
 };
 
 pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    
+
+
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
-        ssid: "homin_outside".try_into().unwrap(),
+        ssid: "dummy_ssid".try_into().unwrap(),
+        password: "dummy_password".try_into().unwrap(),
         bssid: None,
         auth_method: AuthMethod::WPA2Personal,
-        password: "homin_outside_pass".try_into().unwrap(),
         channel: None,
         ..Default::default()
     });

@@ -23,6 +23,7 @@ def make_panel(
         DPI = 300,
         fontPath = r'./Hakgyoansim Byeolbichhaneul TTF B.ttf',
         flip = False,
+        fontMarginPix = 0,
     ):
     panelString = '''
     열한다세네
@@ -60,6 +61,8 @@ def make_panel(
             fontSize = i - charMargin
             break
 
+    fontSize = fontSize + fontMarginPix
+
     font = ImageFont.truetype(fontPath, fontSize, encoding="unic")
 
     print (f"cPix = {cPix}")
@@ -85,8 +88,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Make silkscreen for panel of HangulClock.')
     parser.add_argument('--font_path', type=str, default=r'./GowunDodum-Regular.ttf', help='Path to the font file')
     parser.add_argument('--y_offset', type=float, default=0, help='Y offset in mm')
+    parser.add_argument('--font_margin', type=float, default=0, help='Font margin in mm')
     args = parser.parse_args()
 
-    make_panel(drawYOffsetMM=args.y_offset, fontPath=args.font_path, flip=True)
+    make_panel(drawYOffsetMM=args.y_offset, fontPath=args.font_path, flip=True, fontMarginPix=args.font_margin)
 
 # vim: et sw=4 fenc=utf-8:

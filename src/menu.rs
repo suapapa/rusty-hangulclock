@@ -6,6 +6,7 @@ use esp_idf_svc::hal::i2c::*;
 use log::info;
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
 use std::time;
+use crate::panel::LED_WRITE_LOCK;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MenuOption {
@@ -381,6 +382,9 @@ pub fn draw_text(disp: &mut Sh1106GM<I2cInterface<I2cDriver>>, text: &str) -> an
         prelude::*,
         text::{Alignment, Text},
     };
+
+    // Wait for any LED write operations to complete
+    let _read_guard = LED_WRITE_LOCK.read().unwrap();
 
     // last_text와 다를 때만 출력
     let mut last_text = LAST_TEXT.lock().unwrap();
