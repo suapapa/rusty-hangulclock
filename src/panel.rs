@@ -158,6 +158,8 @@ impl<SPI: SpiBus> Sleds<SPI> {
     }
 
     fn show_leds(&mut self, leds: Vec<u8>) {
+        let _write_guard = LED_WRITE_LOCK.write().unwrap();
+
         let leds = remap(leds);
         let mut data = [RGB8::default(); LED_NUM];
 
@@ -173,7 +175,6 @@ impl<SPI: SpiBus> Sleds<SPI> {
         }
 
         // Get write lock before writing to LEDs
-        let _write_guard = LED_WRITE_LOCK.write().unwrap();
         self.sleds
             .lock()
             .unwrap()
@@ -182,19 +183,8 @@ impl<SPI: SpiBus> Sleds<SPI> {
     }
 
     pub fn turn_on_all(&mut self) {
-        let mut data = [RGB8::default(); LED_NUM];
-        let led_hsv = Hsv {
-            hue: *global::LED_HUE.lock().unwrap(),
-            sat: *global::LED_SAT.lock().unwrap(),
-            val: *global::LED_VAL.lock().unwrap(),
-        };
-        let led_rgb = hsv2rgb(led_hsv);
-        for i in 0..LED_NUM {
-            data[i] = led_rgb;
-        }
-        // Get write lock before writing to LEDs
-        let _write_guard = LED_WRITE_LOCK.write().unwrap();
-        self.sleds.lock().unwrap().write(gamma(data.iter().cloned())).unwrap();
+        let all_leds: Vec<u8> = (0..LED_NUM as u8).collect();
+        self.show_leds(all_leds);
     }
 }
 
