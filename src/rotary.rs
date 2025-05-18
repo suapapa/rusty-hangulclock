@@ -2,6 +2,7 @@ use crate::global;
 use embassy_time::{Duration, Ticker};
 use log::info;
 use rotary_encoder_hal::{Direction, Rotary};
+// use crate::panel::LED_WRITE_LOCK;
 
 pub async fn rotary_encoder_loop(
     menu_r1: impl embedded_hal::digital::InputPin,
@@ -16,43 +17,47 @@ pub async fn rotary_encoder_loop(
     const DEBOUNCE_THRESHOLD: u8 = 3; // Reduced threshold
 
     loop {
-        match enc.update().unwrap() {
-            Direction::Clockwise => {
-                if last_direction != Direction::Clockwise {
-                    debounce_count = 0;
-                    last_direction = Direction::Clockwise;
-                }
-                debounce_count += 1;
-                if debounce_count >= DEBOUNCE_THRESHOLD {
-                    info!("Clockwise");
-                    if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
-                        *event = global::RotaryEvent::Clockwise;
+        {
+            match enc.update().unwrap() {
+                Direction::Clockwise => {
+            // let _read_guard = LED_WRITE_LOCK.read().unwrap();
+                    if last_direction != Direction::Clockwise {
+                        debounce_count = 0;
+                        last_direction = Direction::Clockwise;
                     }
-                    debounce_count = 0;
-                }
-            }
-            Direction::CounterClockwise => {
-                if last_direction != Direction::CounterClockwise {
-                    debounce_count = 0;
-                    last_direction = Direction::CounterClockwise;
-                }
-                debounce_count += 1;
-                if debounce_count >= DEBOUNCE_THRESHOLD {
-                    info!("CounterClockwise");
-                    if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
-                        *event = global::RotaryEvent::CounterClockwise;
+                    debounce_count += 1;
+                    if debounce_count >= DEBOUNCE_THRESHOLD {
+                        info!("Clockwise");
+                        if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
+                            *event = global::RotaryEvent::Clockwise;
+                        }
+                        debounce_count = 0;
                     }
-                    debounce_count = 0;
                 }
-            }
-            _ => {
-                // last_direction = Direction::None;
-                // debounce_count = 0;
-                // if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
-                //     *event = global::RotaryEvent::None;
-                // }
+                Direction::CounterClockwise => {
+            // let _read_guard = LED_WRITE_LOCK.read().unwrap();
+                    if last_direction != Direction::CounterClockwise {
+                        debounce_count = 0;
+                        last_direction = Direction::CounterClockwise;
+                    }
+                    debounce_count += 1;
+                    if debounce_count >= DEBOUNCE_THRESHOLD {
+                        info!("CounterClockwise");
+                        if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
+                            *event = global::RotaryEvent::CounterClockwise;
+                        }
+                        debounce_count = 0;
+                    }
+                }
+                _ => {
+                    // last_direction = Direction::None;
+                    // debounce_count = 0;
+                    // if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
+                    //     *event = global::RotaryEvent::None;
+                    // }
+                }
             }
         }
         ticker.next().await;
     }
-} 
+}

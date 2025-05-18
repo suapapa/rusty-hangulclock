@@ -5,9 +5,9 @@ use ws2812_spi::Ws2812;
 
 use embedded_hal::spi::SpiBus;
 use log::info;
+use once_cell::sync::Lazy;
 use smart_leds::{gamma, hsv::hsv2rgb, hsv::Hsv, SmartLedsWrite, RGB8};
 use std::sync::{Arc, Mutex, RwLock};
-use once_cell::sync::Lazy;
 
 use crate::global;
 use crate::nvs;
@@ -77,7 +77,7 @@ impl<SPI: SpiBus> Sleds<SPI> {
             .unwrap()
             .write(gamma(data.iter().cloned()))
             .unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(1000));
+        std::thread::sleep(std::time::Duration::from_millis(1000));
 
         // load default hsv
         let (hue, sat, val) = nvs::get_hsv().unwrap();
@@ -158,8 +158,6 @@ impl<SPI: SpiBus> Sleds<SPI> {
     }
 
     fn show_leds(&mut self, leds: Vec<u8>) {
-        let _write_guard = LED_WRITE_LOCK.write().unwrap();
-
         let leds = remap(leds);
         let mut data = [RGB8::default(); LED_NUM];
 
@@ -170,21 +168,29 @@ impl<SPI: SpiBus> Sleds<SPI> {
         };
         let led_rgb = hsv2rgb(led_hsv);
 
-        for l in leds {
-            data[l as usize] = led_rgb;
-        }
+        {
+            let _write_guard = LED_WRITE_LOCK.write().unwrap();
 
-        // Get write lock before writing to LEDs
-        self.sleds
-            .lock()
-            .unwrap()
-            .write(gamma(data.iter().cloned()))
-            .unwrap();
+            for l in leds {
+                data[l as usize] = led_rgb;
+            }
+
+            // let clear_data = [RGB8::default(); LED_NUM];
+            // self.sleds.lock().unwrap().write(gamma(clear_data.iter().cloned())).unwrap();
+
+            // Get write lock before writing to LEDs
+            self.sleds
+                .lock()
+                .unwrap()
+                .write(gamma(data.iter().cloned()))
+                .unwrap();
+        }
     }
 
     pub fn turn_on_all(&mut self) {
-        let all_leds: Vec<u8> = (0..LED_NUM as u8).collect();
-        self.show_leds(all_leds);
+        // let all_leds: Vec<u8> = (0..LED_NUM as u8).collect();
+        // self.show_leds(all_leds);
+        self.show_leds(vec![0]);
     }
 }
 
@@ -197,7 +203,5 @@ fn remap(leds: Vec<u8>) -> Vec<u8> {
     const MAPPING: [u8; 25] = [
         4, 5, 14, 15, 24, 3, 6, 13, 16, 23, 2, 7, 12, 17, 22, 1, 8, 11, 18, 21, 0, 9, 10, 19, 20,
     ];
-    leds.into_iter()
-        .map(|x| MAPPING[x as usize])
-        .collect()
+    leds.into_iter().map(|x| MAPPING[x as usize]).collect()
 }

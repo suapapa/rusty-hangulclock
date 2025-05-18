@@ -84,7 +84,7 @@ fn main() -> anyhow::Result<()> {
         &SpiDriverConfig::new(),
     )?;
     let spi_config = SpiConfig::new()
-        .baudrate(3.MHz().into())
+        .baudrate(3800.kHz().into())
         .data_mode(SPI_MODE);
     let spi_bus = SpiBusDriver::new(&mut spi_driver, &spi_config)?;
     let mut sleds = panel::Sleds::new(spi_bus);
