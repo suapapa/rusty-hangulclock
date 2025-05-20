@@ -182,6 +182,8 @@ where
 
         if skip_display {
             sleds.turn_on_all();
+            last_h = 0;
+            last_m = 0;
             Timer::after(Duration::from_millis(1000)).await;
             continue;
         }
