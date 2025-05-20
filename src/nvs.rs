@@ -215,3 +215,43 @@ pub fn get_utc_offset() -> anyhow::Result<i32> {
 
     Ok(offset)
 }
+
+pub fn get_device_id() -> anyhow::Result<String> {
+    let nvs_default_partition: EspNvsPartition<NvsCustom> =
+        EspCustomNvsPartition::take("user_nvs")?;
+
+    let ns = "device_id_ns";
+    let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+        Ok(nvs) => {
+            info!("Got namespace {:?} from default partition", ns);
+            nvs
+        }
+        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
+    };
+
+    // String values are limited in the IDF to 4000 bytes, but our buffer is shorter.
+    const MAX_STR_LEN: usize = 100;
+    let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
+
+    match nvs.get_str("device_id", &mut buffer) {
+        Ok(Some(id)) => Ok(id.to_string()),
+        _ => {
+            // Generate new device ID using timestamp and random number
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let random = rand::random::<u32>();
+            let new_id = format!("{:x}-{:x}", timestamp, random);
+            
+            // Store the new ID in NVS
+            match nvs.set_str("device_id", &new_id) {
+                Ok(_) => {
+                    info!("New device ID generated and stored: {}", new_id);
+                    Ok(new_id)
+                }
+                Err(e) => Err(anyhow::anyhow!("Failed to store device ID: {:?}", e)),
+            }
+        }
+    }
+}

@@ -168,6 +168,8 @@ where
 
     let utc_offset: i32 = nvs::get_utc_offset()?;
 
+    let mut is_init: bool = false;
+
     loop {
         match global::IN_MENU.try_lock() {
             Ok(in_menu) => {
@@ -225,6 +227,12 @@ where
         if !ntp_ok {
             Timer::after(Duration::from_secs(10)).await;
             continue;
+        }
+
+        if !is_init {
+            is_init = true;
+            let device_id = nvs::get_device_id()?;
+            info!("Device ID: {}", device_id);
         }
 
         let now = time::SystemTime::now();
