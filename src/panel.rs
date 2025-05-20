@@ -158,20 +158,20 @@ impl<SPI: SpiBus> Sleds<SPI> {
     }
 
     fn show_leds(&mut self, leds: Vec<u8>) {
-        let leds = remap(leds);
-        let mut data = [RGB8::default(); LED_NUM];
+        // let leds = remap(leds);
 
         let led_hsv = Hsv {
             hue: *global::LED_HUE.lock().unwrap(),
             sat: *global::LED_SAT.lock().unwrap(),
             val: *global::LED_VAL.lock().unwrap(),
         };
-        let led_rgb = hsv2rgb(led_hsv);
 
-        {
-            let _write_guard = LED_WRITE_LOCK.write().unwrap();
+        // let _write_guard = LED_WRITE_LOCK.write().unwrap();
 
-            for l in leds {
+        critical_section::with(|_| {
+            let mut data = [RGB8::default(); LED_NUM];
+            let led_rgb = hsv2rgb(led_hsv);
+            for l in remap(leds) {
                 data[l as usize] = led_rgb;
             }
 
@@ -179,18 +179,20 @@ impl<SPI: SpiBus> Sleds<SPI> {
             // self.sleds.lock().unwrap().write(gamma(clear_data.iter().cloned())).unwrap();
 
             // Get write lock before writing to LEDs
+
+            // critical_section::with(|_| {
             self.sleds
                 .lock()
                 .unwrap()
                 .write(gamma(data.iter().cloned()))
                 .unwrap();
-        }
+        });
     }
 
     pub fn turn_on_all(&mut self) {
-        // let all_leds: Vec<u8> = (0..LED_NUM as u8).collect();
-        // self.show_leds(all_leds);
-        self.show_leds(vec![0]);
+        let all_leds: Vec<u8> = (0..LED_NUM as u8).collect();
+        self.show_leds(all_leds);
+        // self.show_leds(vec![0]);
     }
 }
 
