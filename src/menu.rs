@@ -3,7 +3,7 @@ use crate::nvs;
 use embassy_time::{Duration, Timer};
 use esp_idf_svc::hal::i2c::*;
 // use esp_idf_svc::hal::task;
-use crate::panel::LED_WRITE_LOCK;
+// use crate::panel::LED_WRITE_LOCK;
 use log::info;
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
 use std::time;
@@ -99,7 +99,7 @@ pub async fn menu_loop(
         {
             let mut in_menu = global::IN_MENU.lock().unwrap();
             if !(*in_menu) {
-                let _read_guard = LED_WRITE_LOCK.read().unwrap();
+                // let _read_guard = LED_WRITE_LOCK.read().unwrap();
                 let h = *global::CUR_H.lock().unwrap();
                 let m = *global::CUR_M.lock().unwrap();
                 let time_str = format!("{:02}:{:02}", h, m);
@@ -132,7 +132,7 @@ pub async fn menu_loop(
                     continue;
                 }
 
-                let _read_guard = LED_WRITE_LOCK.read().unwrap();
+                // let _read_guard = LED_WRITE_LOCK.read().unwrap();
                 if sub_menu {
                     let mut value = match current_menu {
                         MenuOption::LedHue => *global::LED_HUE.lock().unwrap() as i16,
@@ -408,7 +408,7 @@ pub fn draw_text(disp: &mut Sh1106GM<I2cInterface<I2cDriver>>, text: &str) -> an
     };
 
     // Wait for any LED write operations to complete
-    let _read_guard = LED_WRITE_LOCK.read().unwrap();
+    // let _read_guard = LED_WRITE_LOCK.read().unwrap();
 
     // last_text와 다를 때만 출력
     let mut last_text = LAST_TEXT.lock().unwrap();

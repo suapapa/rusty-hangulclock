@@ -1,6 +1,6 @@
 use crate::global;
 use crate::nvs;
-use crate::panel::LED_WRITE_LOCK;
+// use crate::panel::LED_WRITE_LOCK;
 use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
@@ -82,7 +82,7 @@ const WPS_CONFIG: WpsConfig = WpsConfig {
 };
 
 pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
-    let _write_guard = LED_WRITE_LOCK.write().unwrap();
+    // let _write_guard = LED_WRITE_LOCK.write().unwrap();
 
     let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
         ssid: "dummy_ssid".try_into().unwrap(),
@@ -147,7 +147,7 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
 }
 
 pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<bool> {
-    let _write_guard = LED_WRITE_LOCK.write().unwrap();
+    // let _write_guard = LED_WRITE_LOCK.write().unwrap();
 
     match nvs::get_wifi_cred() {
         Ok((ssid, pass)) => {

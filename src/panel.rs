@@ -5,7 +5,8 @@ use ws2812_spi::Ws2812;
 
 use embedded_hal::spi::SpiBus;
 use log::info;
-use once_cell::sync::Lazy;
+// use once_cell::sync::Lazy;
+use esp_idf_svc::hal::interrupt;
 use smart_leds::{gamma, hsv::hsv2rgb, hsv::Hsv, SmartLedsWrite, RGB8};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -15,7 +16,7 @@ use crate::nvs;
 const LED_NUM: usize = 25;
 // const DEFAULT_BRIGHTNESS: u8 = 100;
 
-pub static LED_WRITE_LOCK: Lazy<RwLock<()>> = Lazy::new(|| RwLock::new(()));
+// pub static LED_WRITE_LOCK: Lazy<RwLock<()>> = Lazy::new(|| RwLock::new(()));
 
 #[cfg(feature = "dotstar")]
 pub struct Sleds<SPI> {
@@ -175,17 +176,13 @@ impl<SPI: SpiBus> Sleds<SPI> {
                 data[l as usize] = led_rgb;
             }
 
-            // let clear_data = [RGB8::default(); LED_NUM];
-            // self.sleds.lock().unwrap().write(gamma(clear_data.iter().cloned())).unwrap();
-
-            // Get write lock before writing to LEDs
-
-            // critical_section::with(|_| {
-            self.sleds
-                .lock()
-                .unwrap()
-                .write(gamma(data.iter().cloned()))
-                .unwrap();
+            interrupt::free(|| {
+                self.sleds
+                    .lock()
+                    .unwrap()
+                    .write(gamma(data.iter().cloned()))
+                    .unwrap();
+            });
         });
     }
 
