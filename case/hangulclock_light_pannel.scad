@@ -46,7 +46,7 @@ module oled_supports_v_2() {
         //translate([0,33.7-3,0]) support(3, 5);
         //translate([31.8-3,0,0]) support(3, 5+4);
         //translate([31.8-3,33.7-3,0]) support(3, 5+4);
-        translate([31.8-3,(33.7-3)/2,0]) support_cube(4+4);
+        translate([31.8-3-10,(33.7-3)/2,0]) support_cube(4+4-0.1);
     }
 }
 

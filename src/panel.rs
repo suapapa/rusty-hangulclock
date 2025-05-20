@@ -8,7 +8,7 @@ use log::info;
 // use once_cell::sync::Lazy;
 use esp_idf_svc::hal::interrupt;
 use smart_leds::{gamma, hsv::hsv2rgb, hsv::Hsv, SmartLedsWrite, RGB8};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use crate::global;
 use crate::nvs;

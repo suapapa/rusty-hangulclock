@@ -4,6 +4,7 @@ use std::sync::{
     // mpsc::{self, Receiver, Sender},
     Mutex,
 };
+use std::time;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RotaryEvent {
@@ -24,4 +25,18 @@ lazy_static! {
     pub static ref LED_SAT: Mutex<u8> = Mutex::new(255);
     pub static ref LED_VAL: Mutex<u8> = Mutex::new(255);
     pub static ref UTC_OFFSET: Mutex<i8> = Mutex::new(9); // Default to KST (UTC+9)
+    pub static ref BOOT_TIME: Mutex<u128> = Mutex::new(0);
+}
+
+pub fn get_uptime() -> u128 {
+    let now = time::SystemTime::now();
+    let timestamp = now.duration_since(time::UNIX_EPOCH).unwrap().as_millis();
+    let boot_time = *BOOT_TIME.lock().unwrap();
+    match boot_time {
+        0 => {
+            *BOOT_TIME.lock().unwrap() = timestamp;
+            0
+        }
+        _ => timestamp - boot_time,
+    }
 }

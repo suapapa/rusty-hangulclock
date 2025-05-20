@@ -4,6 +4,7 @@ mod net;
 mod nvs;
 mod panel;
 mod rotary;
+mod report;
 
 use chrono::prelude::*;
 use embassy_time::{Duration, Timer};
@@ -126,6 +127,7 @@ fn main() -> anyhow::Result<()> {
     let menu_task = menu::menu_loop(&mut disp, menu_sel);
     let time_sync_task = time_sync_loop();
     let rotary_encoder_task = rotary::rotary_encoder_loop(menu_r2, menu_r1);
+    let report_task = report::report_loop();
 
     info!("Starting tasks...");
     task::block_on(async {
@@ -134,7 +136,8 @@ fn main() -> anyhow::Result<()> {
             net_task,
             time_sync_task,
             show_time_task,
-            rotary_encoder_task
+            rotary_encoder_task,
+            report_task,
         ) {
             Ok(_) => info!("All tasks completed"),
             Err(e) => info!("Error in task: {:?}", e),
@@ -176,8 +179,6 @@ where
     let mut last_m: u8 = 0;
 
     let utc_offset: i32 = nvs::get_utc_offset()?;
-
-    let mut is_init: bool = false;
 
     loop {
         match global::IN_MENU.try_lock() {
@@ -238,21 +239,15 @@ where
             continue;
         }
 
-        if !is_init {
-            is_init = true;
-            let device_id = nvs::get_device_id()?;
-            info!("Device ID: {}", device_id);
-        }
-
         let now = time::SystemTime::now();
         let timestamp = now.duration_since(time::UNIX_EPOCH).unwrap().as_millis();
-        let datetime = Utc.timestamp_millis_opt(timestamp as i64).unwrap();
-        let datetime_kst =
-            datetime.with_timezone(&FixedOffset::east_opt(utc_offset * 3600).unwrap());
-        // info!("Current datetime: {}", datetime_kst);
 
-        let h: u8 = datetime_kst.hour() as u8;
-        let m: u8 = datetime_kst.minute() as u8;
+        let datetime = Utc.timestamp_millis_opt(timestamp as i64).unwrap();
+        let local_datetime =
+            datetime.with_timezone(&FixedOffset::east_opt(utc_offset * 3600).unwrap());
+
+        let h: u8 = local_datetime.hour() as u8;
+        let m: u8 = local_datetime.minute() as u8;
         if last_h != h || last_m != m {
             last_h = h;
             last_m = m;

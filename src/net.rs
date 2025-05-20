@@ -1,6 +1,7 @@
 use crate::global;
 use crate::nvs;
-// use crate::panel::LED_WRITE_LOCK;
+use crate::report;
+
 use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
@@ -55,6 +56,26 @@ pub async fn net_loop(
                         }
                     }
                 }
+
+                "REPORT" => {
+                    info!("Received REPORT command");
+                    let report_json = report::status_report().await?;
+                    match send_report(wifi, report_json).await {
+                        Ok(_) => {
+                            info!("REPORT cmd completed");
+                            *cmd_net = "".to_string();
+                            let mut result = global::RESULT_NET.lock().unwrap();
+                            *result = "OK".to_string();
+                        }
+                        Err(e) => {
+                            warn!("Failed to send report: {:?}", e);
+                            *cmd_net = "".to_string();
+                            let mut result = global::RESULT_NET.lock().unwrap();
+                            *result = "NG".to_string();
+                        }
+                    }
+                }
+
                 _ => {
                     // warn!("Unknown command: \"{}\"", cmd_net);
                 }
@@ -212,7 +233,58 @@ async fn sync_time() -> bool {
         info!("Setting time_synced");
         let mut time_synced = global::TIME_SYNCED.lock().unwrap();
         *time_synced = ret;
+
+        // match report::status_report() {
+        //     Ok(_) => (),
+        //     Err(e) => {
+        //         warn!("Failed to report status: {:?}", e);
+        //     }
+        // }
     }
 
     ret
+}
+
+pub async fn send_report(
+    wifi: &mut AsyncWifi<EspWifi<'static>>,
+    report_json: String,
+) -> anyhow::Result<()> {
+    match nvs::get_wifi_cred() {
+        Ok((ssid, pass)) => {
+            let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
+                ssid: ssid.as_str().try_into().unwrap(),
+                bssid: None,
+                auth_method: AuthMethod::WPA2Personal,
+                password: pass.as_str().try_into().unwrap(),
+                channel: None,
+                ..Default::default()
+            });
+
+            wifi.set_configuration(&wifi_configuration)?;
+        }
+        Err(e) => {
+            warn!("Failed to load wifi cred: {:?}", e);
+            return Err(e);
+        }
+    }
+
+    wifi.start().await?;
+    info!("Wifi started");
+
+    unsafe { esp_wifi_set_max_tx_power(34) };
+
+    let url = "http://homin.dev/hangulclock/report";
+    let client = reqwest::Client::new();
+    let res = client.post(url).body(report_json).send().await?;
+
+    if res.status().is_success() {
+        info!("Report sent successfully");
+    } else {
+        warn!("Failed to send report: {:?}", res.status());
+    }
+
+    wifi.stop().await?;
+    info!("Wifi stopped");
+
+    return Ok(());
 }
