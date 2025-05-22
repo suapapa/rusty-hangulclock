@@ -29,6 +29,8 @@ use apa102_spi::MODE as SPI_MODE;
 #[cfg(feature = "neopixel")]
 use ws2812_spi::MODE as SPI_MODE;
 
+const DEVICE_SERIAL: &str = env!("RUSTY_HANGUL_CLOCK_SERIAL");
+
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
@@ -74,7 +76,7 @@ fn main() -> anyhow::Result<()> {
     disp.flush().unwrap();
     menu::draw_text(
         &mut disp,
-        &format!("Rusty\nHangul\nClock\nno.8\nfor\n\ninit\n..."),
+        &format!("Rusty\nHangul\nClock\nno.{}\nfor\n\ninit\n...", DEVICE_SERIAL),
     )?;
 
     // let spi_driver_config = SpiDriverConfig::new().dma(Dma::Auto(1024));
