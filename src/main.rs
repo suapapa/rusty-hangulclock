@@ -29,7 +29,14 @@ use apa102_spi::MODE as SPI_MODE;
 #[cfg(feature = "neopixel")]
 use ws2812_spi::MODE as SPI_MODE;
 
-const DEVICE_SERIAL: &str = env!("RUSTY_HANGUL_CLOCK_SERIAL");
+const fn get_device_no() -> &'static str {
+    match option_env!("RUSTY_HANGULCLOCK_NO") {
+        Some(s) => s,
+        None => "0000"
+    }
+}
+
+const DEVICE_SERIAL: &str = get_device_no();
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
