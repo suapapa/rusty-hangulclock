@@ -239,6 +239,7 @@ pub fn get_device_id() -> anyhow::Result<String> {
             // make timestamp to RFC3339 format
             let timestamp = std::time::SystemTime::now();
             let rfc3339_timestamp = chrono::DateTime::<chrono::Utc>::from(timestamp)
+                .with_timezone(&chrono::FixedOffset::east(9 * 3600))
                 .to_rfc3339();
             
             let random = rand::random::<u32>();

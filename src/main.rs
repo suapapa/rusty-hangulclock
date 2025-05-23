@@ -45,8 +45,8 @@ fn main() -> anyhow::Result<()> {
     let p_sled_sclk = p.pins.gpio4;
     let p_sled_mosi = p.pins.gpio6;
     let p_sled_spi = p.spi2;
-    let p_menu_r1 = p.pins.gpio1;
-    let p_menu_r2 = p.pins.gpio2;
+    let p_menu_r1 = p.pins.gpio2;
+    let p_menu_r2 = p.pins.gpio1;
     let p_menu_sel = p.pins.gpio3;
 
     let mut menu_sel = PinDriver::input(p_menu_sel)?;
@@ -77,7 +77,7 @@ fn main() -> anyhow::Result<()> {
     disp.flush().unwrap();
     menu::draw_text(
         &mut disp,
-        &format!("Rusty\nHangul\nClock\nno.{}\nfor\n\ninit\n...", DEVICE_SERIAL),
+        &format!("Rusty\nHangul\nClock\nno.{}\n\ninit\n...", DEVICE_SERIAL),
     )?;
 
     // let spi_driver_config = SpiDriverConfig::new().dma(Dma::Auto(1024));
