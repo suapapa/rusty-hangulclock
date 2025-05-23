@@ -4,7 +4,12 @@ use crate::report;
 
 use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
+use embedded_svc::{
+    http::{client::Client, Method},
+    io::Read,
+};
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
+use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::sntp;
 use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
 use esp_idf_svc::wifi::{WpsConfig, WpsFactoryInfo, WpsStatus, WpsType};
@@ -273,15 +278,37 @@ pub async fn send_report(
 
     unsafe { esp_wifi_set_max_tx_power(34) };
 
-    let url = "http://homin.dev/hangulclock/report";
-    let client = reqwest::Client::new();
-    let res = client.post(url).body(report_json).send().await?;
+    // curl -X POST https://homin.dev/hangulclock-forge/v1/live-status \
+    // -H "Content-Type: application/json" -H "Authorization: Bearer 3C8542E1-AE2D-41C8-B9C8-56D1E08A0259" \
+    // -d '{
+    //   "name": "rusty-hangulclock",
+    //   "no": 1,
+    //   "serial": "HC-2024-001",
+    //   "uptime": 0
+    // }'
 
-    if res.status().is_success() {
-        info!("Report sent successfully");
-    } else {
-        warn!("Failed to send report: {:?}", res.status());
-    }
+    let url = "https://homin.dev/hangulclock-forge/v1/live-status";
+    let connection = EspHttpConnection::new(&HttpConfiguration {
+        use_global_ca_store: true,
+        crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
+        ..Default::default()
+    })?;
+    let mut client = Client::wrap(connection);
+
+    let headers = [
+        ("accept", "text/plain"),
+        ("Content-Type", "application/json"),
+        ("Authorization", "Bearer 3C8542E1-AE2D-41C8-B9C8-56D1E08A0259"),
+    ];
+    let mut request = client.request(Method::Post, url.as_ref(), &headers)?;
+
+    request.write(report_json.as_bytes())?;
+    request.flush()?;
+
+    let response = request.submit()?;
+    let status = response.status();
+
+    info!("Response code: {}\n", status);
 
     wifi.stop().await?;
     info!("Wifi stopped");

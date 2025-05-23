@@ -1,18 +1,32 @@
 use embassy_time::{Duration, Timer};
-use log::info;
+use log::{info, warn};
 use serde_json::json;
 
 use crate::global;
-use crate::net;
 use crate::nvs;
 
-async fn status_report() -> anyhow::Result<String> {
+pub const fn get_device_no() -> &'static str {
+    match option_env!("RUSTY_HANGULCLOCK_NO") {
+        Some(s) => s,
+        None => "0000",
+    }
+}
+
+pub async fn status_report() -> anyhow::Result<String> {
     let device_id = nvs::get_device_id()?;
     let uptime = global::get_uptime();
 
+    // {
+    //   "name": "rusty-hangulclock",
+    //   "no": 1,
+    //   "serial": "HC-2024-001",
+    //   "uptime": 0
+    // }
     let report_json = json!({
-        "device_id": device_id,
+        "serial": device_id,
         "uptime": uptime,
+        "no": get_device_no(),
+        "name": "rusty-hangulclock"
     });
 
     info!("Report: {}", report_json);
@@ -20,32 +34,27 @@ async fn status_report() -> anyhow::Result<String> {
 }
 
 pub async fn report_loop() -> anyhow::Result<()> {
-    let mut wait_secs;
-    let mut lauch_report = false;
+    let mut wait_secs: u64 = 0;
+    let mut launch_report = false;
     loop {
         {
+            wait_secs = 1;
             match global::TIME_SYNCED.try_lock() {
                 Ok(time_synced) => {
-                    if !*time_synced {
-                        wait_secs = 10;
-                    } else {
-                        lauch_report = true;
-                        wait_secs = 60 * 60 * 24;
-                    }
+                    launch_report = *time_synced;
                 }
                 _ => {
                     info!("TIME_SYNCED in use");
-                    wait_secs = 1;
                 }
             }
         }
 
-        if lauch_report {
+        if launch_report {
             match global::CMD_NET.try_lock() {
                 Ok(mut cmd_net) => {
                     *cmd_net = "REPORT".to_string();
                     info!("REPORT cmd sent");
-                    lauch_report = false;
+                    launch_report = false;
                     wait_secs = 60 * 60 * 24;
                 }
                 Err(_) => {
@@ -54,6 +63,6 @@ pub async fn report_loop() -> anyhow::Result<()> {
                 }
             }
         }
+        Timer::after(Duration::from_secs(wait_secs)).await;
     }
-    Timer::after(Duration::from_secs(wait_secs)).await;
 }
