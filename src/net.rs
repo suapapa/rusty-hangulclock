@@ -6,7 +6,7 @@ use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use embedded_svc::{
     http::{client::Client, Method},
-    io::Read,
+    // io::Read,
 };
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
@@ -14,6 +14,13 @@ use esp_idf_svc::sntp;
 use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
 use esp_idf_svc::wifi::{WpsConfig, WpsFactoryInfo, WpsStatus, WpsType};
 use log::{info, warn};
+
+pub const fn get_api_token() -> &'static str {
+    match option_env!("RUSTY_HANGULCLOCK_TOKEN") {
+        Some(s) => s,
+        None => "0000",
+    }
+}
 
 pub async fn net_loop(
     wifi: &mut AsyncWifi<EspWifi<'static>>,
@@ -279,7 +286,7 @@ pub async fn send_report(
     unsafe { esp_wifi_set_max_tx_power(34) };
 
     // curl -X POST https://homin.dev/hangulclock-forge/v1/live-status \
-    // -H "Content-Type: application/json" -H "Authorization: Bearer 3C8542E1-AE2D-41C8-B9C8-56D1E08A0259" \
+    // -H "Content-Type: application/json" -H "Authorization: Bearer {TOKEN}" \
     // -d '{
     //   "name": "rusty-hangulclock",
     //   "no": 1,
@@ -295,10 +302,11 @@ pub async fn send_report(
     })?;
     let mut client = Client::wrap(connection);
 
+    let auth_header = format!("Bearer {}", get_api_token());
     let headers = [
-        ("accept", "text/plain"),
+        // ("accept", "text/plain"),
         ("Content-Type", "application/json"),
-        ("Authorization", "Bearer 3C8542E1-AE2D-41C8-B9C8-56D1E08A0259"),
+        ("Authorization", auth_header.as_str()),
     ];
     let mut request = client.request(Method::Post, url.as_ref(), &headers)?;
 

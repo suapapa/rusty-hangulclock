@@ -34,7 +34,7 @@ pub async fn status_report() -> anyhow::Result<String> {
 }
 
 pub async fn report_loop() -> anyhow::Result<()> {
-    let mut wait_secs: u64 = 0;
+    let mut wait_secs;
     let mut launch_report = false;
     loop {
         {
