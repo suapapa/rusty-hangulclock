@@ -236,13 +236,13 @@ pub fn get_device_id() -> anyhow::Result<String> {
     match nvs.get_str("device_id", &mut buffer) {
         Ok(Some(id)) => Ok(id.to_string()),
         _ => {
-            // Generate new device ID using timestamp and random number
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
+            // make timestamp to RFC3339 format
+            let timestamp = std::time::SystemTime::now();
+            let rfc3339_timestamp = chrono::DateTime::<chrono::Utc>::from(timestamp)
+                .to_rfc3339();
+            
             let random = rand::random::<u32>();
-            let new_id = format!("{:x}-{:x}", timestamp, random);
+            let new_id = format!("{}-{:x}", rfc3339_timestamp, random);
             
             // Store the new ID in NVS
             match nvs.set_str("device_id", &new_id) {
@@ -254,4 +254,48 @@ pub fn get_device_id() -> anyhow::Result<String> {
             }
         }
     }
+}
+
+pub fn get_boot_count() -> anyhow::Result<u32> {
+    let nvs_default_partition: EspNvsPartition<NvsCustom> =
+        EspCustomNvsPartition::take("user_nvs")?;
+
+    let ns = "boot_count_ns";
+    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+        Ok(nvs) => {
+            info!("Got namespace {:?} from default partition", ns);
+            nvs
+        }
+        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
+    };
+
+    let boot_count = nvs.get_u32("boot_count")
+        .map(|v| v.unwrap_or(0))
+        .unwrap_or(0);
+
+    // Increment boot count
+    // let new_count = boot_count + 1;
+    // nvs.set_u32("boot_count", new_count)?;
+    // nvs.commit()?;
+
+    Ok(boot_count)
+}
+
+pub fn set_boot_count(count: u32) -> anyhow::Result<()> {
+    let nvs_default_partition: EspNvsPartition<NvsCustom> =
+        EspCustomNvsPartition::take("user_nvs")?;
+
+    let ns = "boot_count_ns";
+    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+        Ok(nvs) => {
+            info!("Got namespace {:?} from default partition", ns);
+            nvs
+        }
+        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
+    };
+
+    nvs.set_u32("boot_count", count)?;
+    // nvs.commit()?;
+
+    Ok(())
 }

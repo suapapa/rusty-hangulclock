@@ -106,6 +106,11 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     task::block_on(async {
+        inc_boot_count().await?;
+        Ok::<(), anyhow::Error>(())
+    })?;
+
+    task::block_on(async {
         info!("initial time sync...");
         match net::sync_time_with_wifi(&mut wifi).await {
             Ok(_) => (),
@@ -120,7 +125,6 @@ fn main() -> anyhow::Result<()> {
     let menu_task = menu::menu_loop(&mut disp, menu_sel);
     let time_sync_task = time_sync_loop();
     let rotary_encoder_task = rotary::rotary_encoder_loop(menu_r2, menu_r1);
-    let report_task = report::report_loop();
 
     info!("Starting tasks...");
     task::block_on(async {
@@ -130,7 +134,6 @@ fn main() -> anyhow::Result<()> {
             time_sync_task,
             show_time_task,
             rotary_encoder_task,
-            report_task,
         ) {
             Ok(_) => info!("All tasks completed"),
             Err(e) => info!("Error in task: {:?}", e),
@@ -157,6 +160,12 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             }
         }
     }
+}
+
+async fn inc_boot_count() -> anyhow::Result<()> {
+    let boot_count = nvs::get_boot_count()?;
+    nvs::set_boot_count(boot_count + 1)?;
+    Ok(())
 }
 
 async fn show_time_loop<SPI>(sleds: &mut panel::Sleds<SPI>) -> anyhow::Result<()>

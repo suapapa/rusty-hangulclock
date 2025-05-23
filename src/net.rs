@@ -15,6 +15,8 @@ use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
 use esp_idf_svc::wifi::{WpsConfig, WpsFactoryInfo, WpsStatus, WpsType};
 use log::{info, warn};
 
+use std::time::Duration as StdDuration;
+
 pub const fn get_api_token() -> &'static str {
     match option_env!("RUSTY_HANGULCLOCK_TOKEN") {
         Some(s) => s,
@@ -62,25 +64,6 @@ pub async fn net_loop(
                         }
                         Err(e) => {
                             warn!("Failed to sync time: {:?}", e);
-                            *cmd_net = "".to_string();
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "NG".to_string();
-                        }
-                    }
-                }
-
-                "REPORT" => {
-                    info!("Received REPORT command");
-                    let report_json = report::status_report().await?;
-                    match send_report(wifi, report_json).await {
-                        Ok(_) => {
-                            info!("REPORT cmd completed");
-                            *cmd_net = "".to_string();
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "OK".to_string();
-                        }
-                        Err(e) => {
-                            warn!("Failed to send report: {:?}", e);
                             *cmd_net = "".to_string();
                             let mut result = global::RESULT_NET.lock().unwrap();
                             *result = "NG".to_string();
@@ -170,13 +153,19 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     wifi.wait_netif_up().await?;
     info!("Wifi netif up");
 
+    // Add delay to ensure network is fully initialized
+    Timer::after(Duration::from_secs(2)).await;
+    info!("Network initialization delay completed");
+
     sync_time().await;
     info!("Time synced");
+
+    send_report_without_wifi().await?;
 
     wifi.stop().await?;
     info!("Wifi stopped");
 
-    return Ok(());
+    Ok(())
 }
 
 pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<bool> {
@@ -212,10 +201,16 @@ pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyh
     wifi.wait_netif_up().await?;
     info!("Wifi netif up");
 
+    // Add delay to ensure network is fully initialized
+    Timer::after(Duration::from_secs(2)).await;
+    info!("Network initialization delay completed");
+
     let sync_result = sync_time().await;
     if !sync_result {
         warn!("Failed to sync time");
     }
+
+    send_report_without_wifi().await?;
 
     wifi.stop().await?;
     info!("Wifi stopped");
@@ -245,81 +240,42 @@ async fn sync_time() -> bool {
         info!("Setting time_synced");
         let mut time_synced = global::TIME_SYNCED.lock().unwrap();
         *time_synced = ret;
-
-        // match report::status_report() {
-        //     Ok(_) => (),
-        //     Err(e) => {
-        //         warn!("Failed to report status: {:?}", e);
-        //     }
-        // }
     }
 
     ret
 }
 
-pub async fn send_report(
-    wifi: &mut AsyncWifi<EspWifi<'static>>,
-    report_json: String,
+async fn send_report_without_wifi(
 ) -> anyhow::Result<()> {
-    match nvs::get_wifi_cred() {
-        Ok((ssid, pass)) => {
-            let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
-                ssid: ssid.as_str().try_into().unwrap(),
-                bssid: None,
-                auth_method: AuthMethod::WPA2Personal,
-                password: pass.as_str().try_into().unwrap(),
-                channel: None,
-                ..Default::default()
-            });
-
-            wifi.set_configuration(&wifi_configuration)?;
-        }
-        Err(e) => {
-            warn!("Failed to load wifi cred: {:?}", e);
-            return Err(e);
-        }
-    }
-
-    wifi.start().await?;
-    info!("Wifi started");
-
-    unsafe { esp_wifi_set_max_tx_power(34) };
-
-    // curl -X POST https://homin.dev/hangulclock-forge/v1/live-status \
-    // -H "Content-Type: application/json" -H "Authorization: Bearer {TOKEN}" \
-    // -d '{
-    //   "name": "rusty-hangulclock",
-    //   "no": 1,
-    //   "serial": "HC-2024-001",
-    //   "uptime": 0
-    // }'
+    let report_json = report::status_report().await?;
 
     let url = "https://homin.dev/hangulclock-forge/v1/live-status";
     let connection = EspHttpConnection::new(&HttpConfiguration {
         use_global_ca_store: true,
         crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
+        timeout: Some(StdDuration::from_secs(10)),
         ..Default::default()
     })?;
     let mut client = Client::wrap(connection);
 
     let auth_header = format!("Bearer {}", get_api_token());
     let headers = [
-        // ("accept", "text/plain"),
         ("Content-Type", "application/json"),
         ("Authorization", auth_header.as_str()),
     ];
+
+    info!("Attempting to connect to {}", url);
     let mut request = client.request(Method::Post, url.as_ref(), &headers)?;
 
+    info!("Sending report data");
     request.write(report_json.as_bytes())?;
     request.flush()?;
 
+    info!("Waiting for response");
     let response = request.submit()?;
     let status = response.status();
 
-    info!("Response code: {}\n", status);
+    info!("Response code: {}", status);
 
-    wifi.stop().await?;
-    info!("Wifi stopped");
-
-    return Ok(());
+    Ok(())
 }
