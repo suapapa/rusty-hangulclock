@@ -1,7 +1,9 @@
 difference() {
+    wall=1; //1.6
+    
     cube([170,170,10], center=true);
-    translate([0,0,1.6]) cube([170-1.6*2,150,10], center=true);
-    translate([0,0,1.6]) cube([130,170-1.6*2,10], center=true);
+    translate([0,0,wall]) cube([170-wall*2,150,10], center=true);
+    translate([0,0,wall]) cube([130,170-wall*2,10], center=true);
     translate([0,0,0]) cube([130,150,15], center=true);
     
     translate([0,17,4]) cube([171,10,5], center=true);
