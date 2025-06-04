@@ -6,7 +6,6 @@ use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use embedded_svc::{
     http::{client::Client, Method},
-    // io::Read,
 };
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
@@ -170,7 +169,6 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
 
 pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<bool> {
     // let _write_guard = LED_WRITE_LOCK.write().unwrap();
-
     match nvs::get_wifi_cred() {
         Ok((ssid, pass)) => {
             let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
@@ -245,11 +243,7 @@ async fn sync_time() -> bool {
     ret
 }
 
-async fn send_report_without_wifi(
-) -> anyhow::Result<()> {
-    let report_json = report::status_report().await?;
-
-    let url = "https://homin.dev/hangulclock-forge/v1/live-status";
+async fn send_report_without_wifi() -> anyhow::Result<()> {
     let connection = EspHttpConnection::new(&HttpConfiguration {
         use_global_ca_store: true,
         crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
@@ -264,10 +258,12 @@ async fn send_report_without_wifi(
         ("Authorization", auth_header.as_str()),
     ];
 
+    let url = "https://hangulclock.homin.dev/v1/live-status";
     info!("Attempting to connect to {}", url);
     let mut request = client.request(Method::Post, url.as_ref(), &headers)?;
 
     info!("Sending report data");
+    let report_json = report::status_report().await?;
     request.write(report_json.as_bytes())?;
     request.flush()?;
 

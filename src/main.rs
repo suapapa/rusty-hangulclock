@@ -5,6 +5,7 @@ mod nvs;
 mod panel;
 mod rotary;
 mod report;
+mod ota_update;
 
 use chrono::prelude::*;
 use embassy_time::{Duration, Timer};

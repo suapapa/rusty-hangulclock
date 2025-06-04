@@ -29,20 +29,20 @@ experimental = ["esp-idf-svc/experimental"]
 
 [dependencies]
 log = "0.4"
-esp-idf-svc = { version = "0.50", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
+esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 # esp-idf-svc = { version = "0.49.1" }
-chrono = "0.4.39"
+chrono = "0.4.41"
 sh1106 = "0.5.0"
 embedded-graphics = "0.8.1"
-anyhow = "1.0.94"
-embedded-svc = "0.28.0"
+anyhow = "1.0.98"
+embedded-svc = "0.28.1"
 smart-leds = "0.4.0"
-apa102-spi = "0.4.0"
+apa102-spi = "0.5.1"
 embedded-hal = "1.0.0"
-ws2812-spi = { version = "0.5.0", features = ["std"] }
+ws2812-spi = { version = "0.5.1", features = ["std"] }
 futures = "0.3.31"
 lazy_static = { version = "1.5.0" }
-embassy-time = { version = "0.3.2", features = ["generic-queue-64"] }
+embassy-time = { version = "0.4.0", features = ["generic-queue-64"] }
 embedded-hal-async = "1.0.0"
 rotary-encoder-hal = "0.6.0"
 once_cell = "1.21.3"
