@@ -11,7 +11,7 @@ use std::time;
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MenuOption {
     Wps,
-    Ntp,
+    Ota,
     LedHue,
     LedSat,
     LedVal,
@@ -23,7 +23,7 @@ impl MenuOption {
     fn as_str(&self) -> &'static str {
         match self {
             MenuOption::Wps => "WPS",
-            MenuOption::Ntp => "NTP",
+            MenuOption::Ota => "OTA",
             MenuOption::LedHue => "LED HUE",
             MenuOption::LedSat => "LED SAT",
             MenuOption::LedVal => "LED VAL",
@@ -34,8 +34,8 @@ impl MenuOption {
 
     fn next(&self) -> Self {
         match self {
-            MenuOption::Wps => MenuOption::Ntp,
-            MenuOption::Ntp => MenuOption::LedHue,
+            MenuOption::Wps => MenuOption::Ota,
+            MenuOption::Ota => MenuOption::LedHue,
             MenuOption::LedHue => MenuOption::LedSat,
             MenuOption::LedSat => MenuOption::LedVal,
             MenuOption::LedVal => MenuOption::UtcOffset,
@@ -47,8 +47,8 @@ impl MenuOption {
     fn prev(&self) -> Self {
         match self {
             MenuOption::Wps => MenuOption::Exit,
-            MenuOption::Ntp => MenuOption::Wps,
-            MenuOption::LedHue => MenuOption::Ntp,
+            MenuOption::Ota => MenuOption::Wps,
+            MenuOption::LedHue => MenuOption::Ota,
             MenuOption::LedSat => MenuOption::LedHue,
             MenuOption::LedVal => MenuOption::LedSat,
             MenuOption::UtcOffset => MenuOption::LedVal,
@@ -59,7 +59,7 @@ impl MenuOption {
     fn all() -> [Self; 7] {
         [
             MenuOption::Wps,
-            MenuOption::Ntp,
+            MenuOption::Ota,
             MenuOption::LedHue,
             MenuOption::LedSat,
             MenuOption::LedVal,
@@ -71,7 +71,7 @@ impl MenuOption {
     fn index(&self) -> usize {
         match self {
             MenuOption::Wps => 0,
-            MenuOption::Ntp => 1,
+            MenuOption::Ota => 1,
             MenuOption::LedHue => 2,
             MenuOption::LedSat => 3,
             MenuOption::LedVal => 4,
@@ -303,20 +303,20 @@ pub async fn menu_loop(
                                                 }
                                             }
                                         }
-                                        MenuOption::Ntp => {
-                                            info!("NTP selected");
+                                        MenuOption::Ota => {
+                                            info!("OTA selected");
                                             match global::CMD_NET.try_lock() {
                                                 Ok(mut cmd_net) => {
                                                     draw_text(
                                                         disp,
                                                         &format!(
-                                                        "MENU {}/{}\n**NTP**\n\nwait\na\nmoment",
+                                                        "MENU {}/{}\n**OTA**\n\nwait\na\nmoment",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                     ),
                                                     )?;
-                                                    *cmd_net = "NTP".to_string();
-                                                    info!("NTP cmd sent");
+                                                    *cmd_net = "OTA".to_string();
+                                                    info!("OTA cmd sent");
                                                 }
                                                 Err(_) => {
                                                     info!("CMD_NET in use");

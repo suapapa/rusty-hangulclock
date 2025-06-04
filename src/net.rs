@@ -1,12 +1,11 @@
 use crate::global;
 use crate::nvs;
+use crate::ota_update;
 use crate::report;
 
 use embassy_time::{Duration, Timer};
+use embedded_svc::http::{client::Client, Method};
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
-use embedded_svc::{
-    http::{client::Client, Method},
-};
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::sntp;
@@ -69,17 +68,28 @@ pub async fn net_loop(
                         }
                     }
                 }
+                "OTA" => {
+                    info!("Received OTA command");
+                    match ota_update_with_wifi(wifi).await {
+                        Ok(_) => {
+                            info!("OTA cmd completed");
+                            *cmd_net = "".to_string();
+                            let mut result = global::RESULT_NET.lock().unwrap();
+                            *result = "OK".to_string();
+                        }
+                        Err(e) => {
+                            warn!("Failed to update: {:?}", e);
+                            *cmd_net = "".to_string();
+                            let mut result = global::RESULT_NET.lock().unwrap();
+                            *result = "NG".to_string();
+                        }
+                    }
+                }
 
                 _ => {
                     // warn!("Unknown command: \"{}\"", cmd_net);
                 }
             }
-
-            // if cmd_net.as_str() != "" {
-            //     // info!("Clearing command");
-            //     // let mut cmd_net = global::CMD_NET.lock().unwrap();
-            //     *cmd_net = "".to_string();
-            // }
         }
 
         // debug_led.set_low().unwrap();
@@ -274,4 +284,11 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
     info!("Response code: {}", status);
 
     Ok(())
+}
+
+async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    sync_time_with_wifi(wifi).await?;
+    ota_update::ota_update().await?;
+
+    todo!()
 }

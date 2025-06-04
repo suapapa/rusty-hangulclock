@@ -1,5 +1,6 @@
 use embedded_svc::http::{client::Client, Method};
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
+use esp_idf_svc::ota::{EspOta, EspOtaUpdate};
 use log::info;
 
 use std::time::Duration as StdDuration;
@@ -32,9 +33,24 @@ pub async fn ota_update() -> anyhow::Result<()> {
         let location = response.header("Location").unwrap();
         info!("Redirecting to {}", location);
         let request = client.request(Method::Get, location, &[] /*&headers*/)?;
-        let response = request.submit()?;
+        let mut response = request.submit()?;
         let status = response.status();
         info!("Redirected response code: {}", status);
+        if status == 200 {
+            info!("Applying update...");
+            let mut ota = EspOta::new().expect("obtain OTA instance");
+            let mut update = ota.initiate_update().expect("initiate OTA");
+            let mut buf = [0u8; 4096];
+            while let Ok(n) = response.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                update.write(&buf[..n]).expect("write OTA data");
+            }
+            update.complete().expect("complete OTA");
+            info!("Update complete, rebooting...");
+            esp_idf_svc::hal::reset::restart();
+        }
     } else {
         info!("No update available");
     }
