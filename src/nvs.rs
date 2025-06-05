@@ -127,7 +127,7 @@ pub fn set_hsv(hue: u8, sat: u8, val: u8) -> anyhow::Result<()> {
     let hue_tag = "hue";
     let sat_tag = "sat";
     let val_tag = "val";
-    
+
     match nvs.set_u8(hue_tag, hue) {
         Ok(_) => info!("{:?} updated", hue_tag),
         Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", hue_tag, e)),
@@ -143,7 +143,7 @@ pub fn set_hsv(hue: u8, sat: u8, val: u8) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_hsv() -> anyhow::Result<(u8, u8, u8)> {  
+pub fn get_hsv() -> anyhow::Result<(u8, u8, u8)> {
     let nvs_default_partition: EspNvsPartition<NvsCustom> =
         EspCustomNvsPartition::take("user_nvs")?;
 
@@ -160,17 +160,11 @@ pub fn get_hsv() -> anyhow::Result<(u8, u8, u8)> {
     let sat_tag = "sat";
     let val_tag = "val";
 
-    let hue = nvs.get_u8(hue_tag)
-        .map(|v| v.unwrap_or(0))
-        .unwrap_or(0);
-    let sat = nvs.get_u8(sat_tag)
-        .map(|v| v.unwrap_or(255))
-        .unwrap_or(255);
-    let val = nvs.get_u8(val_tag)
-        .map(|v| v.unwrap_or(255))
-        .unwrap_or(255);
+    let hue = nvs.get_u8(hue_tag).map(|v| v.unwrap_or(0)).unwrap_or(0);
+    let sat = nvs.get_u8(sat_tag).map(|v| v.unwrap_or(255)).unwrap_or(255);
+    let val = nvs.get_u8(val_tag).map(|v| v.unwrap_or(255)).unwrap_or(255);
 
-    Ok((hue, sat, val)) 
+    Ok((hue, sat, val))
 }
 
 pub fn set_utc_offset(offset: i32) -> anyhow::Result<()> {
@@ -209,7 +203,8 @@ pub fn get_utc_offset() -> anyhow::Result<i32> {
     };
 
     let offset_tag = "offset";
-    let offset = nvs.get_i32(offset_tag)
+    let offset = nvs
+        .get_i32(offset_tag)
         .map(|v| v.unwrap_or(9)) // default offset is 9, Asia/Seoul
         .unwrap_or(0);
 
@@ -239,12 +234,12 @@ pub fn get_device_id() -> anyhow::Result<String> {
             // make timestamp to RFC3339 format
             let timestamp = std::time::SystemTime::now();
             let rfc3339_timestamp = chrono::DateTime::<chrono::Utc>::from(timestamp)
-                .with_timezone(&chrono::FixedOffset::east(9 * 3600))
+                .with_timezone(&chrono::FixedOffset::east_opt(9 * 3600).unwrap())
                 .to_rfc3339();
-            
+
             let random = rand::random::<u32>();
             let new_id = format!("{}-{:x}", rfc3339_timestamp, random);
-            
+
             // Store the new ID in NVS
             match nvs.set_str("device_id", &new_id) {
                 Ok(_) => {
@@ -270,7 +265,8 @@ pub fn get_boot_count() -> anyhow::Result<u32> {
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
     };
 
-    let boot_count = nvs.get_u32("boot_count")
+    let boot_count = nvs
+        .get_u32("boot_count")
         .map(|v| v.unwrap_or(0))
         .unwrap_or(0);
 

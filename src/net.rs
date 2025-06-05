@@ -287,8 +287,54 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
 }
 
 async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
-    sync_time_with_wifi(wifi).await?;
-    ota_update::ota_update().await?;
+    match nvs::get_wifi_cred() {
+        Ok((ssid, pass)) => {
+            let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
+                ssid: ssid.as_str().try_into().unwrap(),
+                bssid: None,
+                auth_method: AuthMethod::WPA2Personal,
+                password: pass.as_str().try_into().unwrap(),
+                channel: None,
+                ..Default::default()
+            });
 
-    todo!()
+            wifi.set_configuration(&wifi_configuration)?;
+        }
+        Err(e) => {
+            warn!("Failed to load wifi cred: {:?}", e);
+            return Err(e);
+        }
+    }
+
+    wifi.start().await?;
+    info!("Wifi started");
+
+    unsafe { esp_wifi_set_max_tx_power(34) };
+
+    wifi.connect().await?;
+    info!("Wifi connected");
+
+    wifi.wait_netif_up().await?;
+    info!("Wifi netif up");
+
+    // Add delay to ensure network is fully initialized
+    Timer::after(Duration::from_secs(2)).await;
+    info!("Network initialization delay completed");
+    // sync_time_with_wifi(wifi).await?;
+
+    let ota_result = ota_update::ota_update().await;
+    match ota_result {
+        Err(e) => {
+            warn!("Failed to update: {:?}", e);
+            wifi.stop().await?;
+            info!("Wifi stopped");
+            Err(anyhow::anyhow!("OTA update completed"))
+        }
+        Ok(_) => {
+            info!("OTA update completed");
+            wifi.stop().await?;
+            info!("Wifi stopped");
+            Ok(())
+        }
+    }
 }

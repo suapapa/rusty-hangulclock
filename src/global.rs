@@ -40,3 +40,13 @@ pub fn get_uptime() -> u128 {
         _ => timestamp - boot_time,
     }
 }
+
+pub fn get_sw_version() -> i32 {
+    match option_env!("RUSTY_HANGULCLOCK_SW_VERSION") {
+        Some(s) => match s.parse::<i32>() {
+            Ok(v) => v,
+            Err(_) => 0,
+        },
+        None => 0,
+    }
+}

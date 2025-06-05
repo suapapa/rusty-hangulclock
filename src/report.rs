@@ -1,5 +1,5 @@
+use log::info;
 use serde_json::json;
-use log::{info, warn};
 
 use crate::global;
 use crate::nvs;
@@ -21,6 +21,7 @@ pub async fn status_report() -> anyhow::Result<String> {
         "uptime": uptime,
         "no": get_device_no(),
         "name": "rusty-hangulclock",
+        "sw_version": global::get_sw_version(),
         "boot_count": boot_count,
     });
 
