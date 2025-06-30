@@ -2,10 +2,10 @@ mod global;
 mod menu;
 mod net;
 mod nvs;
-mod panel;
-mod rotary;
-mod report;
 mod ota_update;
+mod panel;
+mod report;
+mod rotary;
 
 use chrono::prelude::*;
 use embassy_time::{Duration, Timer};
@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     )?;
     let mut disp: Sh1106GM<_> = Sh1106Builder::new().connect_i2c(i2c).into();
     disp.init().unwrap();
-    disp.set_rotation(sh1106::prelude::DisplayRotation::Rotate90)
+    disp.set_rotation(sh1106::prelude::DisplayRotation::Rotate270)
         .unwrap();
     disp.flush().unwrap();
     menu::draw_text(
@@ -147,18 +147,38 @@ fn main() -> anyhow::Result<()> {
 async fn time_sync_loop() -> anyhow::Result<()> {
     info!("Starting time_sync_loop()...");
 
+    let mut last_sync_time = time::SystemTime::now();
+    let sync_interval = Duration::from_secs(60 * 60); // 1 hour
+
     loop {
-        Timer::after(Duration::from_secs(60 * 60 * 24)).await; // 24 hours
-        {
-            match global::CMD_NET.try_lock() {
-                Ok(mut cmd_net) => {
-                    *cmd_net = "NTP".to_string();
-                    info!("NTP cmd sent");
-                }
-                Err(_) => {
-                    warn!("CMD_NET in use");
+        let now = time::SystemTime::now();
+        let duration = now.duration_since(last_sync_time).unwrap();
+        if duration.as_secs() > 60 * 60 * 24 {
+            last_sync_time = now;
+            info!("Syncing time...");
+            {
+                match global::CMD_NET.try_lock() {
+                    Ok(mut cmd_net) => {
+                        *cmd_net = "NTP".to_string();
+                        info!("NTP cmd sent");
+                    }
+                    Err(_) => {
+                        warn!("CMD_NET in use");
+                    }
                 }
             }
+            loop {
+                Timer::after(Duration::from_secs(1)).await;
+                if let Ok(mut result) = global::RESULT_NET.try_lock() {
+                    if result.as_str() == "OK" || result.as_str() == "NG" {
+                        info!("NTP cmd completed: {}", result.as_str());
+                        *result = "".to_string();
+                        break;
+                    }
+                }
+            }
+        } else {
+            Timer::after(sync_interval).await;
         }
     }
 }
@@ -199,7 +219,7 @@ where
             sleds.turn_on_all();
             last_h = 0;
             last_m = 0;
-            Timer::after(Duration::from_millis(1000)).await;
+            Timer::after(Duration::from_secs(1)).await;
             continue;
         }
 
@@ -217,12 +237,12 @@ where
                         }
                     }
                     loop {
-                        Timer::after(Duration::from_millis(1000)).await;
+                        Timer::after(Duration::from_secs(1)).await;
                         if let Ok(mut result) = global::RESULT_NET.try_lock() {
                             if result.as_str() == "OK" || result.as_str() == "NG" {
                                 info!("NTP cmd completed: {}", result.as_str());
-                                *result = "".to_string();
                                 ntp_ok = result.as_str() == "OK";
+                                *result = "".to_string();
                                 break;
                             }
                         }
@@ -233,11 +253,13 @@ where
             }
             Err(_) => {
                 warn!("TIME_SYNCED in use");
+                Timer::after(Duration::from_secs(1)).await;
                 continue;
             }
         }
 
         if !ntp_ok {
+            warn!("NTP not OK. retry in 10 seconds");
             Timer::after(Duration::from_secs(10)).await;
             continue;
         }

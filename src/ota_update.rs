@@ -1,3 +1,4 @@
+use embassy_time::{Duration, Timer};
 use embedded_svc::http::{client::Client, Method};
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::ota::EspOta;
@@ -8,7 +9,6 @@ use std::time::Duration as StdDuration;
 use crate::global;
 
 pub async fn ota_update() -> anyhow::Result<()> {
-    // https://hangulclock.homin.dev/v1/ping 이 200 을 반환할 때 까지 10초 간격으로 10회 시도해 보고 실패하면 오류를 반환하게 해 줘
     use std::thread::sleep;
 
     let ping_url = "https://hangulclock.homin.dev/v1/ping";
@@ -29,7 +29,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
             break;
         }
         if attempt < 10 {
-            sleep(StdDuration::from_secs(10));
+            Timer::after(Duration::from_secs(10)).await;
         }
     }
     if !ping_success {
