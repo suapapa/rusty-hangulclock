@@ -9,8 +9,6 @@ use std::time::Duration as StdDuration;
 use crate::global;
 
 pub async fn ota_update() -> anyhow::Result<()> {
-    use std::thread::sleep;
-
     let ping_url = "https://hangulclock.homin.dev/v1/ping";
     let mut ping_success = false;
     for attempt in 1..=10 {
@@ -44,8 +42,9 @@ pub async fn ota_update() -> anyhow::Result<()> {
     })?;
     let mut client = Client::wrap(connection);
     let url = format!(
-        "https://hangulclock.homin.dev/v1/update?version={}",
-        global::get_sw_version()
+        "https://hangulclock.homin.dev/v1/update?version={}&rev={}",
+        global::get_sw_version(),
+        global::get_hw_revision(),
     );
     info!("Attempting to connect to {}", url);
     let request = client.request(Method::Get, url.as_ref(), &[] /*&headers*/)?;

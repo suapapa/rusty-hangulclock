@@ -296,3 +296,41 @@ pub fn set_boot_count(count: u32) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub fn get_device_no() -> anyhow::Result<String> {
+    let nvs_default_partition: EspNvsPartition<NvsCustom> =
+        EspCustomNvsPartition::take("user_nvs")?;
+
+    let ns = "device_no_ns";
+    let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+        Ok(nvs) => {
+            info!("Got namespace {:?} from default partition", ns);
+            nvs
+        }
+        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
+    };
+
+    const MAX_STR_LEN: usize = 10;
+    let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
+    let device_no = match nvs.get_str("device_no", &mut buffer) {
+        Ok(Some(v)) => v.to_string(),
+        _ => {
+            let new_id = get_device_no_from_env();
+            if !new_id.is_empty() {
+                nvs.set_str("device_no", new_id)?;
+                new_id.to_string()
+            } else {
+                "0000".to_string()
+            }
+        }
+    };
+
+    Ok(device_no.to_string())
+}
+
+fn get_device_no_from_env() -> &'static str {
+    match option_env!("RUSTY_HANGULCLOCK_NO") {
+        Some(s) => s,
+        None => "",
+    }
+}

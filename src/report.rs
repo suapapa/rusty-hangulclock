@@ -4,13 +4,6 @@ use serde_json::json;
 use crate::global;
 use crate::nvs;
 
-pub const fn get_device_no() -> &'static str {
-    match option_env!("RUSTY_HANGULCLOCK_NO") {
-        Some(s) => s,
-        None => "0000",
-    }
-}
-
 pub async fn status_report() -> anyhow::Result<String> {
     let device_id = nvs::get_device_id()?;
     let boot_count = nvs::get_boot_count()?;
@@ -19,8 +12,9 @@ pub async fn status_report() -> anyhow::Result<String> {
     let report_json = json!({
         "serial": device_id,
         "uptime": uptime,
-        "no": get_device_no(),
         "name": "rusty-hangulclock",
+        "hw_revision": global::get_hw_revision(),
+        "no": nvs::get_device_no()?,
         "sw_version": global::get_sw_version(),
         "boot_count": boot_count,
     });

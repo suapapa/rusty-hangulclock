@@ -50,3 +50,13 @@ pub fn get_sw_version() -> i32 {
         None => 0,
     }
 }
+
+pub fn get_hw_revision() -> i32 {
+    match option_env!("RUSTY_HANGULCLOCK_HW_REVISION") {
+        Some(s) => match s.parse::<i32>() {
+            Ok(v) => v,
+            Err(_) => 0,
+        },
+        None => 0,
+    }
+}

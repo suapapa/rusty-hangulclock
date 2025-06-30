@@ -21,7 +21,7 @@ use esp_idf_svc::hal::task;
 use esp_idf_svc::timer::EspTaskTimerService;
 use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
-use log::{info, warn};
+use log::{debug, info, warn};
 use sh1106::{prelude::GraphicsMode as Sh1106GM, Builder as Sh1106Builder};
 // use smart_leds::{gamma, hsv::hsv2rgb, hsv::Hsv, SmartLedsWrite, RGB8};
 use std::time;
@@ -30,8 +30,6 @@ use std::time;
 use apa102_spi::MODE as SPI_MODE;
 #[cfg(feature = "neopixel")]
 use ws2812_spi::MODE as SPI_MODE;
-
-const DEVICE_SERIAL: &str = report::get_device_no();
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
@@ -78,7 +76,11 @@ fn main() -> anyhow::Result<()> {
     disp.flush().unwrap();
     menu::draw_text(
         &mut disp,
-        &format!("Rusty\nHangul\nClock\nno.{}\n\ninit\n...", DEVICE_SERIAL),
+        &format!(
+            "Rusty\nHangul\nClock\nrev{}\nno.{}\n\ninit\n...",
+            global::get_hw_revision(),
+            nvs::get_device_no()?
+        ),
     )?;
 
     // let spi_driver_config = SpiDriverConfig::new().dma(Dma::Auto(1024));
@@ -285,7 +287,7 @@ where
                     *global_m = m;
                 }
             }
-            info!("Time updated, h: {}, m: {}", h, m);
+            debug!("Time updated, h: {}, m: {}", h, m);
             sleds.show_time(h, m);
         }
         Timer::after(Duration::from_secs(1)).await;
