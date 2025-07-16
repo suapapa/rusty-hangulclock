@@ -113,15 +113,15 @@ fn main() -> anyhow::Result<()> {
         Ok::<(), anyhow::Error>(())
     })?;
 
-    task::block_on(async {
-        info!("initial time sync...");
-        match net::sync_time_with_wifi(&mut wifi).await {
-            Ok(_) => (),
-            Err(e) => {
-                warn!("Failed to sync time: {:?}", e);
-            }
-        }
-    });
+    // task::block_on(async {
+    //     info!("initial time sync...");
+    //     match net::sync_time_with_wifi(&mut wifi).await {
+    //         Ok(_) => (),
+    //         Err(e) => {
+    //             warn!("Failed to sync time: {:?}", e);
+    //         }
+    //     }
+    // });
 
     let net_task = net::net_loop(&mut wifi);
     let show_time_task = show_time_loop(&mut sleds);
@@ -155,7 +155,8 @@ async fn time_sync_loop() -> anyhow::Result<()> {
     loop {
         let now = time::SystemTime::now();
         let duration = now.duration_since(last_sync_time).unwrap();
-        if duration.as_secs() > 60 * 60 * 24 {
+        // TBD : 2 hours -> 2 days
+        if duration.as_secs() > 60 * 60 * 2 {
             last_sync_time = now;
             info!("Syncing time...");
             {
@@ -199,7 +200,6 @@ where
     //sleds.turn_on_all();
 
     let mut skip_display: bool; // = false;
-    let mut ntp_ok: bool; // = false;
     let mut last_h: u8 = 0;
     let mut last_m: u8 = 0;
 
@@ -211,7 +211,20 @@ where
                 skip_display = *in_menu;
             }
             Err(_) => {
-                // warn!("IN_MENU in use");
+                debug!("IN_MENU in use");
+                Timer::after(Duration::from_secs(1)).await;
+                continue;
+            }
+        }
+
+        match global::TIME_SYNCED.try_lock() {
+            Ok(time_synced) => {
+                if !*time_synced {
+                    skip_display = true;
+                }
+            }
+            Err(_) => {
+                debug!("TIME_SYNCED in use");
                 Timer::after(Duration::from_secs(1)).await;
                 continue;
             }
@@ -222,47 +235,6 @@ where
             last_h = 0;
             last_m = 0;
             Timer::after(Duration::from_secs(1)).await;
-            continue;
-        }
-
-        match global::TIME_SYNCED.try_lock() {
-            Ok(time_synced) => {
-                if !*time_synced {
-                    match global::CMD_NET.try_lock() {
-                        Ok(mut cmd_net) => {
-                            *cmd_net = "NTP".to_string();
-                            info!("NTP cmd sent");
-                        }
-                        Err(_) => {
-                            info!("CMD_NET in use");
-                            continue;
-                        }
-                    }
-                    loop {
-                        Timer::after(Duration::from_secs(1)).await;
-                        if let Ok(mut result) = global::RESULT_NET.try_lock() {
-                            if result.as_str() == "OK" || result.as_str() == "NG" {
-                                info!("NTP cmd completed: {}", result.as_str());
-                                ntp_ok = result.as_str() == "OK";
-                                *result = "".to_string();
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    ntp_ok = true;
-                }
-            }
-            Err(_) => {
-                warn!("TIME_SYNCED in use");
-                Timer::after(Duration::from_secs(1)).await;
-                continue;
-            }
-        }
-
-        if !ntp_ok {
-            warn!("NTP not OK. retry in 10 seconds");
-            Timer::after(Duration::from_secs(10)).await;
             continue;
         }
 

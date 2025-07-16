@@ -27,6 +27,13 @@ pub async fn net_loop(
     // mut debug_led: impl embedded_hal::digital::OutputPin,
 ) -> anyhow::Result<()> {
     // debug_led.set_high().unwrap();
+    info!("initial time sync...");
+    match sync_time_with_wifi(wifi).await {
+        Ok(_) => (),
+        Err(e) => {
+            warn!("Failed to sync time: {:?}", e);
+        }
+    }
 
     loop {
         Timer::after(Duration::from_millis(100)).await;
@@ -53,6 +60,8 @@ pub async fn net_loop(
                 }
                 "NTP" => {
                     info!("Received NTP command");
+                    send_report(wifi).await?;
+
                     match sync_time_with_wifi(wifi).await {
                         Ok(_) => {
                             info!("NTP cmd completed");
@@ -178,7 +187,6 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
 }
 
 pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<bool> {
-    // let _write_guard = LED_WRITE_LOCK.write().unwrap();
     match nvs::get_wifi_cred() {
         Ok((ssid, pass)) => {
             let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
@@ -218,8 +226,6 @@ pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyh
         warn!("Failed to sync time");
     }
 
-    send_report_without_wifi().await?;
-
     wifi.stop().await?;
     info!("Wifi stopped");
 
@@ -251,6 +257,49 @@ async fn sync_time() -> bool {
     }
 
     ret
+}
+
+pub async fn send_report(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    match nvs::get_wifi_cred() {
+        Ok((ssid, pass)) => {
+            let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
+                ssid: ssid.as_str().try_into().unwrap(),
+                bssid: None,
+                auth_method: AuthMethod::WPA2Personal,
+                password: pass.as_str().try_into().unwrap(),
+                channel: None,
+                ..Default::default()
+            });
+
+            wifi.set_configuration(&wifi_configuration)?;
+        }
+        Err(e) => {
+            warn!("Failed to load wifi cred: {:?}", e);
+            return Err(e);
+        }
+    }
+
+    wifi.start().await?;
+    info!("Wifi started");
+
+    unsafe { esp_wifi_set_max_tx_power(34) };
+
+    wifi.connect().await?;
+    info!("Wifi connected");
+
+    wifi.wait_netif_up().await?;
+    info!("Wifi netif up");
+
+    // Add delay to ensure network is fully initialized
+    Timer::after(Duration::from_secs(2)).await;
+    info!("Network initialization delay completed");
+
+    send_report_without_wifi().await?;
+
+    wifi.stop().await?;
+    info!("Wifi stopped");
+
+    Ok(())
 }
 
 async fn send_report_without_wifi() -> anyhow::Result<()> {
@@ -320,7 +369,6 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
     // Add delay to ensure network is fully initialized
     Timer::after(Duration::from_secs(2)).await;
     info!("Network initialization delay completed");
-    // sync_time_with_wifi(wifi).await?;
 
     let ota_result = ota_update::ota_update().await;
     match ota_result {
