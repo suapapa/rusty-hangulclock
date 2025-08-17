@@ -2,10 +2,13 @@ use crate::global;
 use crate::nvs;
 use crate::ota_update;
 use crate::report;
+use crate::web_server;
 
 use embassy_time::{Duration, Timer};
 use embedded_svc::http::{client::Client, Method};
-use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
+use embedded_svc::wifi::{
+    AccessPointConfiguration, AuthMethod, ClientConfiguration, Configuration,
+};
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::sntp;
@@ -53,6 +56,23 @@ pub async fn net_loop(
             let mut cmd_net = global::CMD_NET.lock().unwrap();
 
             match cmd_net.as_str() {
+                "AP" => {
+                    info!("Received AP command");
+                    match connect_ap(wifi).await {
+                        Ok(_) => {
+                            info!("AP cmd completed");
+                            *cmd_net = "".to_string();
+                            let mut result = global::RESULT_NET.lock().unwrap();
+                            *result = "OK".to_string();
+                        }
+                        Err(e) => {
+                            warn!("Failed to connect to wifi with ap: {:?}", e);
+                            *cmd_net = "".to_string();
+                            let mut result = global::RESULT_NET.lock().unwrap();
+                            *result = "NG".to_string();
+                        }
+                    }
+                }
                 "WPS" => {
                     info!("Received WPS command");
                     match connect_wps(wifi).await {
@@ -126,6 +146,27 @@ const WPS_CONFIG: WpsConfig = WpsConfig {
         device_name: "Rusty HangulClock",
     },
 };
+
+pub async fn connect_ap(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    let wifi_configuration: Configuration = Configuration::AccessPoint(AccessPointConfiguration {
+        ssid: "rusty-hangulclock".try_into().unwrap(),
+        password: "12345678".try_into().unwrap(),
+        max_connections: 1,
+        auth_method: AuthMethod::WPA2Personal,
+        ..Default::default()
+    });
+    wifi.set_configuration(&wifi_configuration)?;
+
+    wifi.start().await?;
+    info!("Wifi started");
+
+    wifi.wait_netif_up().await?;
+    info!("Wifi netif up");
+
+    web_server::start_web_server().await?;
+
+    Ok(())
+}
 
 pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
     // let _write_guard = LED_WRITE_LOCK.write().unwrap();

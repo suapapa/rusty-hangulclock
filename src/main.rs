@@ -6,6 +6,7 @@ mod ota_update;
 mod panel;
 mod report;
 mod rotary;
+mod web_server;
 
 use chrono::prelude::*;
 use embassy_time::{Duration, Timer};
