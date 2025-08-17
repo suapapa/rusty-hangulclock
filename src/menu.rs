@@ -261,25 +261,51 @@ pub async fn menu_loop(
                                     menu_enter_ts = get_ts();
                                     match current_menu {
                                         MenuOption::ApMode => {
+                                            info!("AP MODE selected");
                                             match global::CMD_NET.try_lock() {
                                                 Ok(mut cmd_net) => {
                                                     draw_text(
                                                         disp,
                                                         &format!(
-                                                            "MENU {}/{}\n**AP MODE**",
+                                                            "MENU {}/{}\n**AP MODE**\n\nreboot\nto\nexit",
                                                             current_menu.index() + 1,
                                                             menu_len,
                                                         ),
                                                     )?;
                                                     *cmd_net = "AP".to_string();
-                                                    info!("WPS cmd sent");
+                                                    info!("AP cmd sent");
                                                 }
                                                 Err(_) => {
                                                     info!("CMD_NET in use");
                                                     continue;
                                                 }
                                             }
-                                            // TBU: AP MODE 선택 시 네트워크 설정 화면으로 이동
+                                            loop {
+                                                Timer::after(Duration::from_millis(1000)).await;
+                                                if let Ok(mut result) =
+                                                    global::RESULT_NET.try_lock()
+                                                {
+                                                    if result.as_str() == "OK"
+                                                        || result.as_str() == "NG"
+                                                    {
+                                                        info!("AP cmd completed");
+                                                        draw_text(
+                                                            disp,
+                                                            &format!(
+                                                                "MENU {}/{}\nAP\n**{}**",
+                                                                current_menu.index() + 1,
+                                                                menu_len,
+                                                                result.as_str(),
+                                                            ),
+                                                        )?;
+                                                        Timer::after(Duration::from_millis(1000))
+                                                            .await;
+                                                        *in_menu = false;
+                                                        *result = "".to_string();
+                                                        break;
+                                                    }
+                                                }
+                                            }
                                         }
                                         MenuOption::Wps => {
                                             info!("WPS selected");

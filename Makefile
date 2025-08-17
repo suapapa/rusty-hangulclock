@@ -26,7 +26,7 @@ erase_nvs:
 	cargo espflash erase-parts --partition-table part.csv nvs user_nvs
 
 monitor:
-	cargo espfalsh monitor --chip esp32c3
+	cargo espflash monitor --chip esp32c3
 
 clean:
 	rm -rf release

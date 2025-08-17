@@ -38,6 +38,7 @@ pub async fn net_loop(
         }
     }
 
+    let mut ap_mode = false;
     // Watchdog 카운터 추가
     let mut watchdog_counter = 0;
     const WATCHDOG_INTERVAL: u32 = 10000; // 100ms * 10000 = 1000초마다 체크
@@ -52,6 +53,10 @@ pub async fn net_loop(
             watchdog_counter = 0;
         }
 
+        if ap_mode {
+            continue;
+        }
+
         {
             let mut cmd_net = global::CMD_NET.lock().unwrap();
 
@@ -64,6 +69,7 @@ pub async fn net_loop(
                             *cmd_net = "".to_string();
                             let mut result = global::RESULT_NET.lock().unwrap();
                             *result = "OK".to_string();
+                            ap_mode = true;
                         }
                         Err(e) => {
                             warn!("Failed to connect to wifi with ap: {:?}", e);
@@ -286,7 +292,13 @@ pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyh
 }
 
 async fn sync_time() -> bool {
-    let sntp = sntp::EspSntp::new_default().expect("Failed to create SNTP");
+    let sntp_conf = sntp::SntpConf {
+        servers: ["time.google.com"], // "pool.ntp.org"
+        operating_mode: sntp::OperatingMode::Poll,
+        sync_mode: sntp::SyncMode::Immediate,
+    };
+
+    let sntp = sntp::EspSntp::new(&sntp_conf).expect("Failed to create SNTP");
     let mut ret = false;
     let mut retry = 10;
     loop {
