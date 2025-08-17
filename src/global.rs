@@ -30,14 +30,39 @@ lazy_static! {
 
 pub fn get_uptime() -> u128 {
     let now = time::SystemTime::now();
-    let timestamp = now.duration_since(time::UNIX_EPOCH).unwrap().as_millis();
-    let boot_time = *BOOT_TIME.lock().unwrap();
+    let timestamp = match now.duration_since(time::UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis(),
+        Err(_) => {
+            // 시스템 시간 오류 시 0 반환
+            return 0;
+        }
+    };
+
+    let boot_time = match BOOT_TIME.lock() {
+        Ok(guard) => *guard,
+        Err(_) => {
+            // 락 오류 시 0 반환
+            return 0;
+        }
+    };
+
     match boot_time {
         0 => {
-            *BOOT_TIME.lock().unwrap() = timestamp;
+            // 부트 시간이 설정되지 않은 경우에만 설정
+            if let Ok(mut guard) = BOOT_TIME.lock() {
+                *guard = timestamp;
+            }
             0
         }
-        _ => timestamp - boot_time,
+        _ => {
+            // 오버플로우 방지를 위한 안전한 계산
+            if timestamp >= boot_time {
+                timestamp - boot_time
+            } else {
+                // 오버플로우 발생 시 0 반환
+                0
+            }
+        }
     }
 }
 

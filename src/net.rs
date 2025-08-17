@@ -35,8 +35,20 @@ pub async fn net_loop(
         }
     }
 
+    // Watchdog 카운터 추가
+    let mut watchdog_counter = 0;
+    const WATCHDOG_INTERVAL: u32 = 10000; // 100ms * 10000 = 1000초마다 체크
+
     loop {
         Timer::after(Duration::from_millis(100)).await;
+
+        // Watchdog 체크
+        watchdog_counter += 1;
+        if watchdog_counter >= WATCHDOG_INTERVAL {
+            info!("Net loop watchdog reset");
+            watchdog_counter = 0;
+        }
+
         {
             let mut cmd_net = global::CMD_NET.lock().unwrap();
 

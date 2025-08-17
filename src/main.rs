@@ -152,9 +152,21 @@ async fn time_sync_loop() -> anyhow::Result<()> {
     let mut last_sync_time = time::SystemTime::now();
     let sync_interval = Duration::from_secs(60 * 60); // 1 hour
 
+    // Watchdog 카운터 추가
+    let mut watchdog_counter = 0;
+    const WATCHDOG_INTERVAL: u32 = 3600; // 1시간마다 체크
+
     loop {
         let now = time::SystemTime::now();
         let duration = now.duration_since(last_sync_time).unwrap();
+
+        // Watchdog 체크
+        watchdog_counter += 1;
+        if watchdog_counter >= WATCHDOG_INTERVAL {
+            info!("Time sync loop watchdog reset");
+            watchdog_counter = 0;
+        }
+
         // TBD : 2 hours -> 2 days
         if duration.as_secs() > 60 * 60 * 2 {
             last_sync_time = now;
@@ -170,8 +182,20 @@ async fn time_sync_loop() -> anyhow::Result<()> {
                     }
                 }
             }
+
+            // NTP 동기화 루프에 타임아웃 추가
+            let mut timeout_count = 0;
+            const MAX_TIMEOUT: u8 = 30; // 30초 타임아웃
+
             loop {
                 Timer::after(Duration::from_secs(1)).await;
+                timeout_count += 1;
+
+                if timeout_count >= MAX_TIMEOUT {
+                    warn!("NTP sync timeout, breaking loop");
+                    break;
+                }
+
                 if let Ok(mut result) = global::RESULT_NET.try_lock() {
                     if result.as_str() == "OK" || result.as_str() == "NG" {
                         info!("NTP cmd completed: {}", result.as_str());
@@ -203,9 +227,20 @@ where
     let mut last_h: u8 = 0;
     let mut last_m: u8 = 0;
 
+    // Watchdog 카운터 추가
+    let mut watchdog_counter = 0;
+    const WATCHDOG_INTERVAL: u32 = 3600; // 1시간마다 체크
+
     let utc_offset: i32 = nvs::get_utc_offset()?;
 
     loop {
+        // Watchdog 체크
+        watchdog_counter += 1;
+        if watchdog_counter >= WATCHDOG_INTERVAL {
+            info!("Show time loop watchdog reset");
+            watchdog_counter = 0;
+        }
+
         match global::IN_MENU.try_lock() {
             Ok(in_menu) => {
                 skip_display = *in_menu;
@@ -254,9 +289,13 @@ where
                 // h, m 값을 전역 변수에 저장
                 if let Ok(mut global_h) = global::CUR_H.try_lock() {
                     *global_h = h;
+                } else {
+                    debug!("Failed to update global H value");
                 }
                 if let Ok(mut global_m) = global::CUR_M.try_lock() {
                     *global_m = m;
+                } else {
+                    debug!("Failed to update global M value");
                 }
             }
             debug!("Time updated, h: {}, m: {}", h, m);

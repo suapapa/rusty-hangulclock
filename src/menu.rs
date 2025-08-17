@@ -4,7 +4,7 @@ use embassy_time::{Duration, Timer};
 use esp_idf_svc::hal::i2c::*;
 // use esp_idf_svc::hal::task;
 // use crate::panel::LED_WRITE_LOCK;
-use log::info;
+use log::{info, warn};
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
 use std::time;
 
@@ -94,8 +94,20 @@ pub async fn menu_loop(
     let mut menu_enter_ts: u128 = get_ts();
     let mut sub_menu = false;
 
+    // Watchdog 카운터 추가
+    let mut watchdog_counter = 0;
+    const WATCHDOG_INTERVAL: u32 = 1000; // 50ms * 1000 = 50초마다 체크
+
     loop {
         Timer::after(Duration::from_millis(50)).await;
+
+        // Watchdog 체크
+        watchdog_counter += 1;
+        if watchdog_counter >= WATCHDOG_INTERVAL {
+            info!("Menu loop watchdog reset");
+            watchdog_counter = 0;
+        }
+
         {
             let mut in_menu = global::IN_MENU.lock().unwrap();
             if !(*in_menu) {
@@ -109,6 +121,8 @@ pub async fn menu_loop(
                     disp,
                     &format!("Rusty\nHangul\nClock\n{sw_ver_str}\n\n{time_str}\n\nrotate\nknob"),
                 )?;
+
+                // try_lock 실패 시 적절한 대기 추가
                 if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
                     match *event {
                         global::RotaryEvent::Clockwise | global::RotaryEvent::CounterClockwise => {
@@ -121,10 +135,23 @@ pub async fn menu_loop(
                         }
                         _ => {}
                     }
+                } else {
+                    // 락을 얻지 못했을 때 짧은 대기
+                    Timer::after(Duration::from_millis(5)).await;
                 }
             } else {
                 let ts_now = get_ts();
-                if (ts_now - menu_enter_ts) > 60 * 1000 {
+                // 오버플로우 방지를 위한 안전한 시간 계산
+                let time_diff = if ts_now >= menu_enter_ts {
+                    ts_now - menu_enter_ts
+                } else {
+                    // 오버플로우 발생 시 메뉴 강제 종료
+                    warn!("Timestamp overflow detected, exiting menu");
+                    *in_menu = false;
+                    continue;
+                };
+
+                if time_diff > 60 * 1000 {
                     *in_menu = false;
                     info!("exit menu");
                     continue;
@@ -205,23 +232,42 @@ pub async fn menu_loop(
                             }
                             _ => {}
                         }
+                    } else {
+                        // 락을 얻지 못했을 때 짧은 대기
+                        Timer::after(Duration::from_millis(5)).await;
                     }
 
-                    if p_sel.is_low().unwrap() {
-                        sub_menu = false;
-                        Timer::after(Duration::from_millis(200)).await;
-                        match current_menu {
-                            MenuOption::LedHue | MenuOption::LedSat | MenuOption::LedVal => {
-                                let hue = *global::LED_HUE.lock().unwrap();
-                                let sat = *global::LED_SAT.lock().unwrap();
-                                let val = *global::LED_VAL.lock().unwrap();
-                                nvs::set_hsv(hue, sat, val).unwrap();
+                    // Pin 상태 읽기 에러 처리 개선
+                    match p_sel.is_low() {
+                        Ok(is_low) => {
+                            if is_low {
+                                sub_menu = false;
+                                Timer::after(Duration::from_millis(200)).await;
+                                match current_menu {
+                                    MenuOption::LedHue
+                                    | MenuOption::LedSat
+                                    | MenuOption::LedVal => {
+                                        let hue = *global::LED_HUE.lock().unwrap();
+                                        let sat = *global::LED_SAT.lock().unwrap();
+                                        let val = *global::LED_VAL.lock().unwrap();
+                                        if let Err(e) = nvs::set_hsv(hue, sat, val) {
+                                            warn!("Failed to save HSV values: {:?}", e);
+                                        }
+                                    }
+                                    MenuOption::UtcOffset => {
+                                        let offset = *global::UTC_OFFSET.lock().unwrap();
+                                        if let Err(e) = nvs::set_utc_offset(offset as i32) {
+                                            warn!("Failed to save UTC offset: {:?}", e);
+                                        }
+                                    }
+                                    _ => {}
+                                }
                             }
-                            MenuOption::UtcOffset => {
-                                let offset = *global::UTC_OFFSET.lock().unwrap();
-                                nvs::set_utc_offset(offset as i32).unwrap();
-                            }
-                            _ => {}
+                        }
+                        Err(e) => {
+                            warn!("Failed to read pin state: {:?}", e);
+                            // 에러 발생 시 짧은 대기
+                            Timer::after(Duration::from_millis(10)).await;
                         }
                     }
                 } else {
@@ -250,134 +296,177 @@ pub async fn menu_loop(
                                 *event = global::RotaryEvent::None;
                             }
                             global::RotaryEvent::None => {
-                                if p_sel.is_low().unwrap() {
-                                    info!("decide");
-                                    menu_enter_ts = get_ts();
-                                    match current_menu {
-                                        MenuOption::Wps => {
-                                            info!("WPS selected");
-                                            match global::CMD_NET.try_lock() {
-                                                Ok(mut cmd_net) => {
+                                // Pin 상태 읽기 에러 처리 개선
+                                match p_sel.is_low() {
+                                    Ok(is_low) => {
+                                        if is_low {
+                                            info!("decide");
+                                            menu_enter_ts = get_ts();
+                                            match current_menu {
+                                                MenuOption::Wps => {
+                                                    info!("WPS selected");
+                                                    match global::CMD_NET.try_lock() {
+                                                        Ok(mut cmd_net) => {
+                                                            draw_text(
+                                                                disp,
+                                                                &format!(
+                                                                "MENU {}/{}\n**WPS**\n\nwait\na\nmoment",
+                                                                current_menu.index() + 1,
+                                                                menu_len,
+                                                            ),
+                                                            )?;
+                                                            *cmd_net = "WPS".to_string();
+                                                            info!("WPS cmd sent");
+                                                        }
+                                                        Err(_) => {
+                                                            info!("CMD_NET in use");
+                                                            continue;
+                                                        }
+                                                    }
+
+                                                    // WPS 처리 루프에 타임아웃 추가
+                                                    let mut timeout_count = 0;
+                                                    const MAX_TIMEOUT: u8 = 30; // 30초 타임아웃
+
+                                                    loop {
+                                                        Timer::after(Duration::from_millis(1000))
+                                                            .await;
+                                                        timeout_count += 1;
+
+                                                        if timeout_count >= MAX_TIMEOUT {
+                                                            warn!("WPS operation timeout, breaking loop");
+                                                            break;
+                                                        }
+
+                                                        if let Ok(mut result) =
+                                                            global::RESULT_NET.try_lock()
+                                                        {
+                                                            if result.as_str() == "OK"
+                                                                || result.as_str() == "NG"
+                                                            {
+                                                                info!("WPS cmd completed");
+                                                                draw_text(
+                                                                    disp,
+                                                                    &format!(
+                                                                        "MENU {}/{}\nWPS\n**{}**",
+                                                                        current_menu.index() + 1,
+                                                                        menu_len,
+                                                                        result.as_str(),
+                                                                    ),
+                                                                )?;
+                                                                Timer::after(
+                                                                    Duration::from_millis(1000),
+                                                                )
+                                                                .await;
+                                                                *in_menu = false;
+                                                                *result = "".to_string();
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                MenuOption::Ota => {
+                                                    info!("OTA selected");
+                                                    match global::CMD_NET.try_lock() {
+                                                        Ok(mut cmd_net) => {
+                                                            draw_text(
+                                                                disp,
+                                                                &format!(
+                                                                "MENU {}/{}\n**OTA**\n\nwait\na\nmoment",
+                                                                current_menu.index() + 1,
+                                                                menu_len,
+                                                            ),
+                                                            )?;
+                                                            *cmd_net = "OTA".to_string();
+                                                            info!("OTA cmd sent");
+                                                        }
+                                                        Err(_) => {
+                                                            info!("CMD_NET in use");
+                                                            continue;
+                                                        }
+                                                    }
+
+                                                    // OTA 처리 루프에 타임아웃 추가
+                                                    let mut timeout_count = 0;
+                                                    const MAX_TIMEOUT: u8 = 60; // OTA는 60초 타임아웃
+
+                                                    loop {
+                                                        Timer::after(Duration::from_millis(1000))
+                                                            .await;
+                                                        timeout_count += 1;
+
+                                                        if timeout_count >= MAX_TIMEOUT {
+                                                            warn!("OTA operation timeout, breaking loop");
+                                                            break;
+                                                        }
+
+                                                        if let Ok(mut result) =
+                                                            global::RESULT_NET.try_lock()
+                                                        {
+                                                            if result.as_str() == "OK"
+                                                                || result.as_str() == "NG"
+                                                            {
+                                                                info!("OTA cmd completed");
+                                                                draw_text(
+                                                                    disp,
+                                                                    &format!(
+                                                                        "MENU {}/{}\nOTA\n**{}**",
+                                                                        current_menu.index() + 1,
+                                                                        menu_len,
+                                                                        result.as_str(),
+                                                                    ),
+                                                                )?;
+                                                                Timer::after(
+                                                                    Duration::from_millis(1000),
+                                                                )
+                                                                .await;
+                                                                *in_menu = false;
+                                                                *result = "".to_string();
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                MenuOption::LedHue
+                                                | MenuOption::LedSat
+                                                | MenuOption::LedVal => {
+                                                    // LED color settings
+                                                    sub_menu = true;
+                                                    Timer::after(Duration::from_millis(200)).await;
+                                                }
+                                                MenuOption::UtcOffset => {
+                                                    // UTC OFFSET
+                                                    sub_menu = true;
+                                                    Timer::after(Duration::from_millis(200)).await;
+                                                }
+                                                MenuOption::Exit => {
+                                                    // EXIT
+                                                    info!("EXIT selected");
                                                     draw_text(
                                                         disp,
                                                         &format!(
-                                                        "MENU {}/{}\n**WPS**\n\nwait\na\nmoment",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                    ),
+                                                            "MENU {}/{}\n\n**EXIT**",
+                                                            current_menu.index() + 1,
+                                                            menu_len,
+                                                        ),
                                                     )?;
-                                                    *cmd_net = "WPS".to_string();
-                                                    info!("WPS cmd sent");
-                                                }
-                                                Err(_) => {
-                                                    info!("CMD_NET in use");
-                                                    continue;
-                                                }
-                                            }
-                                            loop {
-                                                Timer::after(Duration::from_millis(1000)).await;
-                                                if let Ok(mut result) =
-                                                    global::RESULT_NET.try_lock()
-                                                {
-                                                    if result.as_str() == "OK"
-                                                        || result.as_str() == "NG"
-                                                    {
-                                                        info!("WPS cmd completed");
-                                                        draw_text(
-                                                            disp,
-                                                            &format!(
-                                                                "MENU {}/{}\nWPS\n**{}**",
-                                                                current_menu.index() + 1,
-                                                                menu_len,
-                                                                result.as_str(),
-                                                            ),
-                                                        )?;
-                                                        Timer::after(Duration::from_millis(1000))
-                                                            .await;
-                                                        *in_menu = false;
-                                                        *result = "".to_string();
-                                                        break;
-                                                    }
+                                                    Timer::after(Duration::from_millis(1000)).await;
+                                                    *in_menu = false;
                                                 }
                                             }
                                         }
-                                        MenuOption::Ota => {
-                                            info!("OTA selected");
-                                            match global::CMD_NET.try_lock() {
-                                                Ok(mut cmd_net) => {
-                                                    draw_text(
-                                                        disp,
-                                                        &format!(
-                                                        "MENU {}/{}\n**OTA**\n\nwait\na\nmoment",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                    ),
-                                                    )?;
-                                                    *cmd_net = "OTA".to_string();
-                                                    info!("OTA cmd sent");
-                                                }
-                                                Err(_) => {
-                                                    info!("CMD_NET in use");
-                                                    continue;
-                                                }
-                                            }
-                                            loop {
-                                                Timer::after(Duration::from_millis(1000)).await;
-                                                if let Ok(mut result) =
-                                                    global::RESULT_NET.try_lock()
-                                                {
-                                                    if result.as_str() == "OK"
-                                                        || result.as_str() == "NG"
-                                                    {
-                                                        info!("NTP cmd completed");
-                                                        draw_text(
-                                                            disp,
-                                                            &format!(
-                                                                "MENU {}/{}\nNTP\n**{}**",
-                                                                current_menu.index() + 1,
-                                                                menu_len,
-                                                                result.as_str(),
-                                                            ),
-                                                        )?;
-                                                        Timer::after(Duration::from_millis(1000))
-                                                            .await;
-                                                        *in_menu = false;
-                                                        *result = "".to_string();
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        MenuOption::LedHue
-                                        | MenuOption::LedSat
-                                        | MenuOption::LedVal => {
-                                            // LED color settings
-                                            sub_menu = true;
-                                            Timer::after(Duration::from_millis(200)).await;
-                                        }
-                                        MenuOption::UtcOffset => {
-                                            // UTC OFFSET
-                                            sub_menu = true;
-                                            Timer::after(Duration::from_millis(200)).await;
-                                        }
-                                        MenuOption::Exit => {
-                                            // EXIT
-                                            info!("EXIT selected");
-                                            draw_text(
-                                                disp,
-                                                &format!(
-                                                    "MENU {}/{}\n\n**EXIT**",
-                                                    current_menu.index() + 1,
-                                                    menu_len,
-                                                ),
-                                            )?;
-                                            Timer::after(Duration::from_millis(1000)).await;
-                                            *in_menu = false;
-                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to read pin state: {:?}", e);
+                                        // 에러 발생 시 짧은 대기
+                                        Timer::after(Duration::from_millis(10)).await;
                                     }
                                 }
                             }
                         }
+                    } else {
+                        // 락을 얻지 못했을 때 짧은 대기
+                        Timer::after(Duration::from_millis(5)).await;
                     }
                 }
             }
