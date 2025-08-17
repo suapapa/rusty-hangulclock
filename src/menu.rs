@@ -103,13 +103,11 @@ pub async fn menu_loop(
                 let h = *global::CUR_H.lock().unwrap();
                 let m = *global::CUR_M.lock().unwrap();
                 let time_str = format!("{:02}:{:02}", h, m);
+                let sw_ver_str = format!("sw-v{}", global::get_sw_version());
 
                 draw_text(
                     disp,
-                    &format!(
-                        "Rusty\nHangul\nClock\n{}\n\nrotate\nknob\nto\nenter menu",
-                        time_str
-                    ),
+                    &format!("Rusty\nHangul\nClock\n{sw_ver_str}\n\n{time_str}\n\nrotate\nknob"),
                 )?;
                 if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
                     match *event {
