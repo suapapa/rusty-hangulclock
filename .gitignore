@@ -31,3 +31,10 @@ node_modules/
 # Task files
 tasks.json
 tasks/ 
+
+*.stl
+*.bak
+*.cursor
+*.env.example
+ref/
+release/
