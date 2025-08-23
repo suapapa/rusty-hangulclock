@@ -72,8 +72,18 @@ fn main() -> anyhow::Result<()> {
     )?;
     let mut disp: Sh1106GM<_> = Sh1106Builder::new().connect_i2c(i2c).into();
     disp.init().unwrap();
-    disp.set_rotation(sh1106::prelude::DisplayRotation::Rotate270)
-        .unwrap();
+
+    let hw_rev = global::get_hw_revision();
+    match hw_rev {
+        3 => disp
+            .set_rotation(sh1106::prelude::DisplayRotation::Rotate90)
+            .unwrap(),
+
+        // 4
+        _ => disp
+            .set_rotation(sh1106::prelude::DisplayRotation::Rotate270)
+            .unwrap(),
+    }
     disp.flush().unwrap();
     menu::draw_text(
         &mut disp,
