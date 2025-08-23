@@ -154,8 +154,13 @@ const WPS_CONFIG: WpsConfig = WpsConfig {
 };
 
 pub async fn connect_ap(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    let device_no = nvs::get_device_no().unwrap_or("0000".to_string());
+
     let wifi_configuration: Configuration = Configuration::AccessPoint(AccessPointConfiguration {
-        ssid: "rusty-hangulclock".try_into().unwrap(),
+        ssid: format!("rusty-hangulclock-{device_no}")
+            .as_str()
+            .try_into()
+            .unwrap(),
         password: "12345678".try_into().unwrap(),
         max_connections: 1,
         auth_method: AuthMethod::WPA2Personal,

@@ -2,6 +2,7 @@ use crate::global;
 use crate::nvs;
 use embassy_time::{Duration, Timer};
 use esp_idf_svc::hal::i2c::*;
+use esp_idf_svc::hal::reset::restart;
 // use esp_idf_svc::hal::task;
 // use crate::panel::LED_WRITE_LOCK;
 use log::info;
@@ -267,7 +268,7 @@ pub async fn menu_loop(
                                                     draw_text(
                                                         disp,
                                                         &format!(
-                                                            "MENU {}/{}\n**AP MODE**\n\nreboot\nto\nexit",
+                                                            "MENU {}/{}\n**AP MODE**\n\nconnect\nto\n192.168\n.71.1\nfor\nconfig",
                                                             current_menu.index() + 1,
                                                             menu_len,
                                                         ),
@@ -281,30 +282,36 @@ pub async fn menu_loop(
                                                 }
                                             }
                                             loop {
-                                                Timer::after(Duration::from_millis(1000)).await;
-                                                if let Ok(mut result) =
-                                                    global::RESULT_NET.try_lock()
-                                                {
-                                                    if result.as_str() == "OK"
-                                                        || result.as_str() == "NG"
-                                                    {
-                                                        info!("AP cmd completed");
-                                                        draw_text(
-                                                            disp,
-                                                            &format!(
-                                                                "MENU {}/{}\nAP\n**{}**",
-                                                                current_menu.index() + 1,
-                                                                menu_len,
-                                                                result.as_str(),
-                                                            ),
-                                                        )?;
-                                                        Timer::after(Duration::from_millis(1000))
-                                                            .await;
-                                                        *in_menu = false;
-                                                        *result = "".to_string();
-                                                        break;
-                                                    }
+                                                Timer::after(Duration::from_millis(100)).await;
+                                                // if press button, reboot
+                                                if p_sel.is_low().unwrap() {
+                                                    info!("reboot");
+                                                    restart();
                                                 }
+
+                                                //     if let Ok(mut result) =
+                                                //         global::RESULT_NET.try_lock()
+                                                //     {
+                                                //         if result.as_str() == "OK"
+                                                //             || result.as_str() == "NG"
+                                                //         {
+                                                //             info!("AP cmd completed");
+                                                //             draw_text(
+                                                //                 disp,
+                                                //                 &format!(
+                                                //                     "MENU {}/{}\nAP\n**{}**",
+                                                //                     current_menu.index() + 1,
+                                                //                     menu_len,
+                                                //                     result.as_str(),
+                                                //                 ),
+                                                //             )?;
+                                                //             Timer::after(Duration::from_millis(1000))
+                                                //                 .await;
+                                                //             *in_menu = false;
+                                                //             *result = "".to_string();
+                                                //             break;
+                                                //         }
+                                                //     }
                                             }
                                         }
                                         MenuOption::Wps => {
