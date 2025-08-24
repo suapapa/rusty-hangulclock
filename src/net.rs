@@ -389,7 +389,9 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
 
     let url = "https://hangulclock.homin.dev/v1/live-status";
     info!("Attempting to connect to {}", url);
+    info!("Before client.request");
     let mut request = client.request(Method::Post, url.as_ref(), &headers)?;
+    info!("After client.request");
 
     info!("Sending report data");
     let report_json = report::status_report().await?;
