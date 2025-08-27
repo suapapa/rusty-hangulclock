@@ -138,16 +138,6 @@ pub async fn net_loop(
     }
 }
 
-const WPS_CONFIG: WpsConfig = WpsConfig {
-    wps_type: WpsType::Pbc,
-    factory_info: WpsFactoryInfo {
-        manufacturer: "homin.dev",
-        model_number: "hangulclock202505",
-        model_name: "Rusty HangulClock",
-        device_name: "Rusty HangulClock",
-    },
-};
-
 pub async fn connect_ap(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
     let device_no = nvs::get_device_no().unwrap_or("0000".to_string());
 
@@ -199,7 +189,22 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     };
 
     info!("Starting WPS...");
-    match wifi.start_wps(&WPS_CONFIG).await? {
+    let hw_rev = global::get_hw_revision();
+    let device_no = nvs::get_device_no().unwrap_or("0000".to_string());
+    let model_number = format!("rhc-{hw_rev}");
+    let model_name = format!("Rusty HangulClock Rev.{hw_rev}");
+    let device_name = format!("rusty-hangulclock-{device_no}");
+    let wps_config = WpsConfig {
+        wps_type: WpsType::Pbc,
+        factory_info: WpsFactoryInfo {
+            manufacturer: "homin.dev",
+            model_number: model_number.as_str(),
+            model_name: model_name.as_str(),
+            device_name: device_name.as_str(),
+        },
+    };
+
+    match wifi.start_wps(&wps_config).await? {
         WpsStatus::SuccessConnected => (),
         WpsStatus::SuccessMultipleAccessPoints(credentials) => {
             log::info!("received multiple credentials, connecting to first one:");
