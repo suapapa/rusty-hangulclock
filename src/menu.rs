@@ -104,169 +104,172 @@ pub async fn menu_loop(
 
     loop {
         Timer::after(Duration::from_millis(50)).await;
-        {
-            let mut in_menu = global::IN_MENU.lock().unwrap();
-            if !(*in_menu) {
-                // let _read_guard = LED_WRITE_LOCK.read().unwrap();
-                let h = *global::CUR_H.lock().unwrap();
-                let m = *global::CUR_M.lock().unwrap();
-                let time_str = format!("{h:02}:{m:02}");
-                let sw_ver_str = format!("sw-v{}", global::get_sw_version());
+        let in_menu = {
+            let in_menu = global::IN_MENU.lock().unwrap();
+            *in_menu
+        };
+
+        if !in_menu {
+            // let _read_guard = LED_WRITE_LOCK.read().unwrap();
+            let h = *global::CUR_H.lock().unwrap();
+            let m = *global::CUR_M.lock().unwrap();
+            let time_str = format!("{h:02}:{m:02}");
+            let sw_ver_str = format!("sw-v{}", global::get_sw_version());
+
+            draw_text(
+                disp,
+                &format!("Rusty\nHangul\nClock\n{sw_ver_str}\n\n{time_str}\n\nrotate\nknob"),
+            )?;
+            if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
+                match *event {
+                    global::RotaryEvent::Clockwise | global::RotaryEvent::CounterClockwise => {
+                        *event = global::RotaryEvent::None;
+                        info!("enter menu");
+                        {
+                            let mut in_menu = global::IN_MENU.lock().unwrap();
+                            *in_menu = true;
+                        }
+                        current_menu = MenuOption::Wps;
+                        sub_menu = false;
+                        menu_enter_ts = get_ts();
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            let ts_now = get_ts();
+            if (ts_now - menu_enter_ts) > 60 * 1000 {
+                {
+                    let mut in_menu = global::IN_MENU.lock().unwrap();
+                    *in_menu = false;
+                }
+                info!("exit menu");
+                continue;
+            }
+
+            // let _read_guard = LED_WRITE_LOCK.read().unwrap();
+            if sub_menu {
+                let mut value = match current_menu {
+                    MenuOption::LedHue => *global::LED_HUE.lock().unwrap() as i16,
+                    MenuOption::LedSat => *global::LED_SAT.lock().unwrap() as i16,
+                    MenuOption::LedVal => *global::LED_VAL.lock().unwrap() as i16,
+                    MenuOption::UtcOffset => *global::UTC_OFFSET.lock().unwrap() as i16,
+                    _ => 0,
+                };
 
                 draw_text(
                     disp,
-                    &format!("Rusty\nHangul\nClock\n{sw_ver_str}\n\n{time_str}\n\nrotate\nknob"),
+                    &format!(
+                        "={}=\n\n{}\n\npress\nto\ndecide",
+                        current_menu.as_str(),
+                        value
+                    ),
                 )?;
+
                 if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
                     match *event {
-                        global::RotaryEvent::Clockwise | global::RotaryEvent::CounterClockwise => {
-                            *event = global::RotaryEvent::None;
-                            info!("enter menu");
-                            *in_menu = true;
-                            current_menu = MenuOption::Wps;
-                            sub_menu = false;
+                        global::RotaryEvent::Clockwise => {
+                            match current_menu {
+                                MenuOption::LedHue | MenuOption::LedSat | MenuOption::LedVal => {
+                                    value += 5;
+                                    if value > 255 {
+                                        value = 255;
+                                    }
+                                }
+                                MenuOption::UtcOffset => {
+                                    value += 1;
+                                    if value > 12 {
+                                        value = 12;
+                                    }
+                                }
+                                _ => {}
+                            }
                             menu_enter_ts = get_ts();
+                            *event = global::RotaryEvent::None;
+                        }
+                        global::RotaryEvent::CounterClockwise => {
+                            match current_menu {
+                                MenuOption::LedHue | MenuOption::LedSat | MenuOption::LedVal => {
+                                    value -= 5;
+                                    if value < 0 {
+                                        value = 0;
+                                    }
+                                }
+                                MenuOption::UtcOffset => {
+                                    value -= 1;
+                                    if value < -12 {
+                                        value = -12;
+                                    }
+                                }
+                                _ => {}
+                            }
+                            menu_enter_ts = get_ts();
+                            *event = global::RotaryEvent::None;
+                        }
+                        _ => {}
+                    }
+
+                    match current_menu {
+                        MenuOption::LedHue => *global::LED_HUE.lock().unwrap() = value as u8,
+                        MenuOption::LedSat => *global::LED_SAT.lock().unwrap() = value as u8,
+                        MenuOption::LedVal => *global::LED_VAL.lock().unwrap() = value as u8,
+                        MenuOption::UtcOffset => *global::UTC_OFFSET.lock().unwrap() = value as i8,
+                        _ => {}
+                    }
+                }
+
+                if p_sel.is_low().unwrap() {
+                    sub_menu = false;
+                    Timer::after(Duration::from_millis(200)).await;
+                    match current_menu {
+                        MenuOption::LedHue | MenuOption::LedSat | MenuOption::LedVal => {
+                            let hue = *global::LED_HUE.lock().unwrap();
+                            let sat = *global::LED_SAT.lock().unwrap();
+                            let val = *global::LED_VAL.lock().unwrap();
+                            nvs::set_hsv(hue, sat, val).unwrap();
+                        }
+                        MenuOption::UtcOffset => {
+                            let offset = *global::UTC_OFFSET.lock().unwrap();
+                            nvs::set_utc_offset(offset as i32).unwrap();
                         }
                         _ => {}
                     }
                 }
             } else {
-                let ts_now = get_ts();
-                if (ts_now - menu_enter_ts) > 60 * 1000 {
-                    *in_menu = false;
-                    info!("exit menu");
-                    continue;
-                }
+                draw_text(
+                    disp,
+                    &format!(
+                        "=MENU {}/{}=\n\n{}\n\npress\nto\ndecide",
+                        current_menu.index() + 1,
+                        menu_len,
+                        current_menu.as_str()
+                    ),
+                )?;
 
-                // let _read_guard = LED_WRITE_LOCK.read().unwrap();
-                if sub_menu {
-                    let mut value = match current_menu {
-                        MenuOption::LedHue => *global::LED_HUE.lock().unwrap() as i16,
-                        MenuOption::LedSat => *global::LED_SAT.lock().unwrap() as i16,
-                        MenuOption::LedVal => *global::LED_VAL.lock().unwrap() as i16,
-                        MenuOption::UtcOffset => *global::UTC_OFFSET.lock().unwrap() as i16,
-                        _ => 0,
-                    };
-
-                    draw_text(
-                        disp,
-                        &format!(
-                            "={}=\n\n{}\n\npress\nto\ndecide",
-                            current_menu.as_str(),
-                            value
-                        ),
-                    )?;
-
-                    if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
-                        match *event {
-                            global::RotaryEvent::Clockwise => {
+                if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
+                    match *event {
+                        global::RotaryEvent::Clockwise => {
+                            current_menu = current_menu.next();
+                            info!("Menu changed to: {current_menu:?}");
+                            menu_enter_ts = get_ts();
+                            *event = global::RotaryEvent::None;
+                        }
+                        global::RotaryEvent::CounterClockwise => {
+                            current_menu = current_menu.prev();
+                            info!("Menu changed to: {current_menu:?}");
+                            menu_enter_ts = get_ts();
+                            *event = global::RotaryEvent::None;
+                        }
+                        global::RotaryEvent::None => {
+                            if p_sel.is_low().unwrap() {
+                                info!("decide");
+                                menu_enter_ts = get_ts();
                                 match current_menu {
-                                    MenuOption::LedHue
-                                    | MenuOption::LedSat
-                                    | MenuOption::LedVal => {
-                                        value += 5;
-                                        if value > 255 {
-                                            value = 255;
-                                        }
-                                    }
-                                    MenuOption::UtcOffset => {
-                                        value += 1;
-                                        if value > 12 {
-                                            value = 12;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                                menu_enter_ts = get_ts();
-                                *event = global::RotaryEvent::None;
-                            }
-                            global::RotaryEvent::CounterClockwise => {
-                                match current_menu {
-                                    MenuOption::LedHue
-                                    | MenuOption::LedSat
-                                    | MenuOption::LedVal => {
-                                        value -= 5;
-                                        if value < 0 {
-                                            value = 0;
-                                        }
-                                    }
-                                    MenuOption::UtcOffset => {
-                                        value -= 1;
-                                        if value < -12 {
-                                            value = -12;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                                menu_enter_ts = get_ts();
-                                *event = global::RotaryEvent::None;
-                            }
-                            _ => {}
-                        }
-
-                        match current_menu {
-                            MenuOption::LedHue => *global::LED_HUE.lock().unwrap() = value as u8,
-                            MenuOption::LedSat => *global::LED_SAT.lock().unwrap() = value as u8,
-                            MenuOption::LedVal => *global::LED_VAL.lock().unwrap() = value as u8,
-                            MenuOption::UtcOffset => {
-                                *global::UTC_OFFSET.lock().unwrap() = value as i8
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    if p_sel.is_low().unwrap() {
-                        sub_menu = false;
-                        Timer::after(Duration::from_millis(200)).await;
-                        match current_menu {
-                            MenuOption::LedHue | MenuOption::LedSat | MenuOption::LedVal => {
-                                let hue = *global::LED_HUE.lock().unwrap();
-                                let sat = *global::LED_SAT.lock().unwrap();
-                                let val = *global::LED_VAL.lock().unwrap();
-                                nvs::set_hsv(hue, sat, val).unwrap();
-                            }
-                            MenuOption::UtcOffset => {
-                                let offset = *global::UTC_OFFSET.lock().unwrap();
-                                nvs::set_utc_offset(offset as i32).unwrap();
-                            }
-                            _ => {}
-                        }
-                    }
-                } else {
-                    draw_text(
-                        disp,
-                        &format!(
-                            "=MENU {}/{}=\n\n{}\n\npress\nto\ndecide",
-                            current_menu.index() + 1,
-                            menu_len,
-                            current_menu.as_str()
-                        ),
-                    )?;
-
-                    if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
-                        match *event {
-                            global::RotaryEvent::Clockwise => {
-                                current_menu = current_menu.next();
-                                info!("Menu changed to: {current_menu:?}");
-                                menu_enter_ts = get_ts();
-                                *event = global::RotaryEvent::None;
-                            }
-                            global::RotaryEvent::CounterClockwise => {
-                                current_menu = current_menu.prev();
-                                info!("Menu changed to: {current_menu:?}");
-                                menu_enter_ts = get_ts();
-                                *event = global::RotaryEvent::None;
-                            }
-                            global::RotaryEvent::None => {
-                                if p_sel.is_low().unwrap() {
-                                    info!("decide");
-                                    menu_enter_ts = get_ts();
-                                    match current_menu {
-                                        MenuOption::ApMode => {
-                                            info!("AP MODE selected");
-                                            match global::CMD_NET.try_lock() {
-                                                Ok(mut cmd_net) => {
-                                                    draw_text(
+                                    MenuOption::ApMode => {
+                                        info!("AP MODE selected");
+                                        match global::CMD_NET.try_lock() {
+                                            Ok(mut cmd_net) => {
+                                                draw_text(
                                                         disp,
                                                         &format!(
                                                             "MENU {}/{}\n**AP MODE**\n\nconnect\nto\n192.168\n.71.1\nfor\nconfig",
@@ -274,188 +277,193 @@ pub async fn menu_loop(
                                                             menu_len,
                                                         ),
                                                     )?;
-                                                    *cmd_net = "AP".to_string();
-                                                    info!("AP cmd sent");
-                                                }
-                                                Err(_) => {
-                                                    info!("CMD_NET in use");
-                                                    continue;
-                                                }
+                                                *cmd_net = "AP".to_string();
+                                                info!("AP cmd sent");
                                             }
-                                            loop {
-                                                Timer::after(Duration::from_millis(100)).await;
-                                                // if press button, reboot
-                                                if p_sel.is_low().unwrap() {
-                                                    info!("reboot");
-                                                    restart();
-                                                }
-
-                                                //     if let Ok(mut result) =
-                                                //         global::RESULT_NET.
-                                                // try_lock()
-                                                //     {
-                                                //         if result.as_str() ==
-                                                // "OK"             ||
-                                                // result.as_str() == "NG"
-                                                //         {
-                                                //             info!("AP cmd
-                                                // completed");
-                                                //             draw_text(
-                                                //                 disp,
-                                                //                 &format!(
-                                                //                     "MENU
-                                                // {}/{}\nAP\n**{}**",
-                                                //
-                                                // current_menu.index() + 1,
-                                                //                     menu_len,
-                                                //
-                                                // result.as_str(),
-                                                //                 ),
-                                                //             )?;
-                                                //
-                                                // Timer::after(Duration::from_millis(1000))
-                                                //                 .await;
-                                                //             *in_menu = false;
-                                                //             *result =
-                                                // "".to_string();
-                                                //             break;
-                                                //         }
-                                                //     }
+                                            Err(_) => {
+                                                info!("CMD_NET in use");
+                                                continue;
                                             }
                                         }
-                                        MenuOption::Wps => {
-                                            info!("WPS selected");
-                                            match global::CMD_NET.try_lock() {
-                                                Ok(mut cmd_net) => {
-                                                    draw_text(
-                                                        disp,
-                                                        &format!(
+                                        loop {
+                                            Timer::after(Duration::from_millis(100)).await;
+                                            // if press button, reboot
+                                            if p_sel.is_low().unwrap() {
+                                                info!("reboot");
+                                                restart();
+                                            }
+
+                                            //     if let Ok(mut result) =
+                                            //         global::RESULT_NET.
+                                            // try_lock()
+                                            //     {
+                                            //         if result.as_str() ==
+                                            // "OK"             ||
+                                            // result.as_str() == "NG"
+                                            //         {
+                                            //             info!("AP cmd
+                                            // completed");
+                                            //             draw_text(
+                                            //                 disp,
+                                            //                 &format!(
+                                            //                     "MENU
+                                            // {}/{}\nAP\n**{}**",
+                                            //
+                                            // current_menu.index() + 1,
+                                            //                     menu_len,
+                                            //
+                                            // result.as_str(),
+                                            //                 ),
+                                            //             )?;
+                                            //
+                                            // Timer::after(Duration::from_millis(1000))
+                                            //                 .await;
+                                            //             *in_menu = false;
+                                            //             *result =
+                                            // "".to_string();
+                                            //             break;
+                                            //         }
+                                            //     }
+                                        }
+                                    }
+                                    MenuOption::Wps => {
+                                        info!("WPS selected");
+                                        match global::CMD_NET.try_lock() {
+                                            Ok(mut cmd_net) => {
+                                                draw_text(
+                                                    disp,
+                                                    &format!(
                                                         "MENU {}/{}\n**WPS**\n\nwait\na\nmoment",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                     ),
-                                                    )?;
-                                                    *cmd_net = "WPS".to_string();
-                                                    info!("WPS cmd sent");
-                                                }
-                                                Err(_) => {
-                                                    info!("CMD_NET in use");
-                                                    continue;
-                                                }
+                                                )?;
+                                                *cmd_net = "WPS".to_string();
+                                                info!("WPS cmd sent");
                                             }
-                                            loop {
-                                                Timer::after(Duration::from_millis(1000)).await;
-
-                                                let result = {
-                                                    if let Ok(mut result) =
-                                                        global::RESULT_NET.try_lock()
-                                                    {
-                                                        let ret = result.clone();
-                                                        *result = "".to_string();
-                                                        ret
-                                                    } else {
-                                                        continue;
-                                                    }
-                                                };
-
-                                                if result.as_str() == "OK"
-                                                    || result.as_str() == "NG"
-                                                {
-                                                    info!("WPS cmd completed");
-                                                    draw_text(
-                                                        disp,
-                                                        &format!(
-                                                            "MENU {}/{}\nWPS\n**{}**",
-                                                            current_menu.index() + 1,
-                                                            menu_len,
-                                                            result.as_str(),
-                                                        ),
-                                                    )?;
-                                                    Timer::after(Duration::from_millis(1000)).await;
-                                                    *in_menu = false;
-                                                    break;
-                                                }
+                                            Err(_) => {
+                                                info!("CMD_NET in use");
+                                                continue;
                                             }
                                         }
-                                        MenuOption::Ota => {
-                                            info!("OTA selected");
-                                            match global::CMD_NET.try_lock() {
-                                                Ok(mut cmd_net) => {
-                                                    draw_text(
-                                                        disp,
-                                                        &format!(
+                                        loop {
+                                            Timer::after(Duration::from_millis(1000)).await;
+
+                                            let result = {
+                                                if let Ok(mut result) =
+                                                    global::RESULT_NET.try_lock()
+                                                {
+                                                    let ret = result.clone();
+                                                    *result = "".to_string();
+                                                    ret
+                                                } else {
+                                                    continue;
+                                                }
+                                            };
+
+                                            if result.as_str() == "OK" || result.as_str() == "NG" {
+                                                info!("WPS cmd completed");
+                                                draw_text(
+                                                    disp,
+                                                    &format!(
+                                                        "MENU {}/{}\nWPS\n**{}**",
+                                                        current_menu.index() + 1,
+                                                        menu_len,
+                                                        result.as_str(),
+                                                    ),
+                                                )?;
+                                                Timer::after(Duration::from_millis(1000)).await;
+                                                {
+                                                    let mut in_menu =
+                                                        global::IN_MENU.lock().unwrap();
+                                                    *in_menu = false;
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    MenuOption::Ota => {
+                                        info!("OTA selected");
+                                        match global::CMD_NET.try_lock() {
+                                            Ok(mut cmd_net) => {
+                                                draw_text(
+                                                    disp,
+                                                    &format!(
                                                         "MENU {}/{}\n**OTA**\n\nwait\na\nmoment",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                     ),
-                                                    )?;
-                                                    *cmd_net = "OTA".to_string();
-                                                    info!("OTA cmd sent");
-                                                }
-                                                Err(_) => {
-                                                    info!("CMD_NET in use");
+                                                )?;
+                                                *cmd_net = "OTA".to_string();
+                                                info!("OTA cmd sent");
+                                            }
+                                            Err(_) => {
+                                                info!("CMD_NET in use");
+                                                continue;
+                                            }
+                                        }
+                                        loop {
+                                            Timer::after(Duration::from_millis(1000)).await;
+
+                                            let result = {
+                                                if let Ok(mut result) =
+                                                    global::RESULT_NET.try_lock()
+                                                {
+                                                    let ret = result.clone();
+                                                    *result = "".to_string();
+                                                    ret
+                                                } else {
                                                     continue;
                                                 }
-                                            }
-                                            loop {
+                                            };
+
+                                            if result.as_str() == "OK" || result.as_str() == "NG" {
+                                                info!("NTP cmd completed");
+                                                draw_text(
+                                                    disp,
+                                                    &format!(
+                                                        "MENU {}/{}\nNTP\n**{}**",
+                                                        current_menu.index() + 1,
+                                                        menu_len,
+                                                        result.as_str(),
+                                                    ),
+                                                )?;
                                                 Timer::after(Duration::from_millis(1000)).await;
-
-                                                let result = {
-                                                    if let Ok(mut result) =
-                                                        global::RESULT_NET.try_lock()
-                                                    {
-                                                        let ret = result.clone();
-                                                        *result = "".to_string();
-                                                        ret
-                                                    } else {
-                                                        continue;
-                                                    }
-                                                };
-
-                                                if result.as_str() == "OK"
-                                                    || result.as_str() == "NG"
                                                 {
-                                                    info!("NTP cmd completed");
-                                                    draw_text(
-                                                        disp,
-                                                        &format!(
-                                                            "MENU {}/{}\nNTP\n**{}**",
-                                                            current_menu.index() + 1,
-                                                            menu_len,
-                                                            result.as_str(),
-                                                        ),
-                                                    )?;
-                                                    Timer::after(Duration::from_millis(1000)).await;
+                                                    let mut in_menu =
+                                                        global::IN_MENU.lock().unwrap();
                                                     *in_menu = false;
-                                                    // *result = "".to_string();
-                                                    break;
                                                 }
+                                                break;
                                             }
                                         }
-                                        MenuOption::LedHue
-                                        | MenuOption::LedSat
-                                        | MenuOption::LedVal => {
-                                            // LED color settings
-                                            sub_menu = true;
-                                            Timer::after(Duration::from_millis(200)).await;
-                                        }
-                                        MenuOption::UtcOffset => {
-                                            // UTC OFFSET
-                                            sub_menu = true;
-                                            Timer::after(Duration::from_millis(200)).await;
-                                        }
-                                        MenuOption::Exit => {
-                                            // EXIT
-                                            info!("EXIT selected");
-                                            draw_text(
-                                                disp,
-                                                &format!(
-                                                    "MENU {}/{}\n\n**EXIT**",
-                                                    current_menu.index() + 1,
-                                                    menu_len,
-                                                ),
-                                            )?;
-                                            Timer::after(Duration::from_millis(1000)).await;
+                                    }
+                                    MenuOption::LedHue
+                                    | MenuOption::LedSat
+                                    | MenuOption::LedVal => {
+                                        // LED color settings
+                                        sub_menu = true;
+                                        Timer::after(Duration::from_millis(200)).await;
+                                    }
+                                    MenuOption::UtcOffset => {
+                                        // UTC OFFSET
+                                        sub_menu = true;
+                                        Timer::after(Duration::from_millis(200)).await;
+                                    }
+                                    MenuOption::Exit => {
+                                        // EXIT
+                                        info!("EXIT selected");
+                                        draw_text(
+                                            disp,
+                                            &format!(
+                                                "MENU {}/{}\n\n**EXIT**",
+                                                current_menu.index() + 1,
+                                                menu_len,
+                                            ),
+                                        )?;
+                                        Timer::after(Duration::from_millis(1000)).await;
+                                        {
+                                            let mut in_menu = global::IN_MENU.lock().unwrap();
                                             *in_menu = false;
                                         }
                                     }
