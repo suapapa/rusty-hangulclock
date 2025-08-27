@@ -345,28 +345,35 @@ pub async fn menu_loop(
                                             }
                                             loop {
                                                 Timer::after(Duration::from_millis(1000)).await;
-                                                if let Ok(mut result) =
-                                                    global::RESULT_NET.try_lock()
-                                                {
-                                                    if result.as_str() == "OK"
-                                                        || result.as_str() == "NG"
+
+                                                let result = {
+                                                    if let Ok(mut result) =
+                                                        global::RESULT_NET.try_lock()
                                                     {
-                                                        info!("WPS cmd completed");
-                                                        draw_text(
-                                                            disp,
-                                                            &format!(
-                                                                "MENU {}/{}\nWPS\n**{}**",
-                                                                current_menu.index() + 1,
-                                                                menu_len,
-                                                                result.as_str(),
-                                                            ),
-                                                        )?;
-                                                        Timer::after(Duration::from_millis(1000))
-                                                            .await;
-                                                        *in_menu = false;
+                                                        let ret = result.clone();
                                                         *result = "".to_string();
-                                                        break;
+                                                        ret
+                                                    } else {
+                                                        continue;
                                                     }
+                                                };
+
+                                                if result.as_str() == "OK"
+                                                    || result.as_str() == "NG"
+                                                {
+                                                    info!("WPS cmd completed");
+                                                    draw_text(
+                                                        disp,
+                                                        &format!(
+                                                            "MENU {}/{}\nWPS\n**{}**",
+                                                            current_menu.index() + 1,
+                                                            menu_len,
+                                                            result.as_str(),
+                                                        ),
+                                                    )?;
+                                                    Timer::after(Duration::from_millis(1000)).await;
+                                                    *in_menu = false;
+                                                    break;
                                                 }
                                             }
                                         }
@@ -392,28 +399,36 @@ pub async fn menu_loop(
                                             }
                                             loop {
                                                 Timer::after(Duration::from_millis(1000)).await;
-                                                if let Ok(mut result) =
-                                                    global::RESULT_NET.try_lock()
-                                                {
-                                                    if result.as_str() == "OK"
-                                                        || result.as_str() == "NG"
+
+                                                let result = {
+                                                    if let Ok(mut result) =
+                                                        global::RESULT_NET.try_lock()
                                                     {
-                                                        info!("NTP cmd completed");
-                                                        draw_text(
-                                                            disp,
-                                                            &format!(
-                                                                "MENU {}/{}\nNTP\n**{}**",
-                                                                current_menu.index() + 1,
-                                                                menu_len,
-                                                                result.as_str(),
-                                                            ),
-                                                        )?;
-                                                        Timer::after(Duration::from_millis(1000))
-                                                            .await;
-                                                        *in_menu = false;
+                                                        let ret = result.clone();
                                                         *result = "".to_string();
-                                                        break;
+                                                        ret
+                                                    } else {
+                                                        continue;
                                                     }
+                                                };
+
+                                                if result.as_str() == "OK"
+                                                    || result.as_str() == "NG"
+                                                {
+                                                    info!("NTP cmd completed");
+                                                    draw_text(
+                                                        disp,
+                                                        &format!(
+                                                            "MENU {}/{}\nNTP\n**{}**",
+                                                            current_menu.index() + 1,
+                                                            menu_len,
+                                                            result.as_str(),
+                                                        ),
+                                                    )?;
+                                                    Timer::after(Duration::from_millis(1000)).await;
+                                                    *in_menu = false;
+                                                    // *result = "".to_string();
+                                                    break;
                                                 }
                                             }
                                         }
