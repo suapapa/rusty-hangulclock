@@ -300,38 +300,6 @@ pub async fn menu_loop(
                                                 info!("reboot");
                                                 restart();
                                             }
-
-                                            //     if let Ok(mut result) =
-                                            //         global::RESULT_NET.
-                                            // try_lock()
-                                            //     {
-                                            //         if result.as_str() ==
-                                            // "OK"             ||
-                                            // result.as_str() == "NG"
-                                            //         {
-                                            //             info!("AP cmd
-                                            // completed");
-                                            //             draw_text(
-                                            //                 disp,
-                                            //                 &format!(
-                                            //                     "MENU
-                                            // {}/{}\nAP\n**{}**",
-                                            //
-                                            // current_menu.index() + 1,
-                                            //                     menu_len,
-                                            //
-                                            // result.as_str(),
-                                            //                 ),
-                                            //             )?;
-                                            //
-                                            // Timer::after(Duration::from_millis(1000))
-                                            //                 .await;
-                                            //             *in_menu = false;
-                                            //             *result =
-                                            // "".to_string();
-                                            //             break;
-                                            //         }
-                                            //     }
                                         }
                                     }
                                     MenuOption::Wps => {

@@ -10,7 +10,7 @@ use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::sntp;
 use esp_idf_svc::wifi::{AsyncWifi, EspWifi, WpsConfig, WpsFactoryInfo, WpsStatus, WpsType};
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use crate::{global, nvs, ota_update, report, web_server};
 
@@ -125,7 +125,9 @@ pub async fn net_loop(
                         }
                     }
                 }
-
+                "" => {
+                    debug!("Received empty command");
+                }
                 _ => {
                     warn!("Unknown command: \"{cmd_net}\"");
                 }
@@ -190,6 +192,12 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
 
     unsafe { esp_wifi_set_max_tx_power(34) };
 
+    // Additional network stability configurations
+    // Set WiFi sleep type to NONE for better connection stability
+    unsafe {
+        esp_idf_svc::hal::sys::esp_wifi_set_ps(esp_idf_svc::hal::sys::wifi_ps_type_t_WIFI_PS_NONE)
+    };
+
     info!("Starting WPS...");
     match wifi.start_wps(&WPS_CONFIG).await? {
         WpsStatus::SuccessConnected => (),
@@ -229,8 +237,12 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     info!("Wifi netif up");
 
     // Add delay to ensure network is fully initialized
-    Timer::after(Duration::from_secs(2)).await;
+    Timer::after(Duration::from_secs(3)).await; // Increased from 2s to 3s
     info!("Network initialization delay completed");
+
+    // Additional network stability check
+    Timer::after(Duration::from_millis(500)).await;
+    info!("Additional network stability delay completed");
 
     sync_time().await;
     info!("Time synced");
@@ -275,8 +287,12 @@ pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyh
     info!("Wifi netif up");
 
     // Add delay to ensure network is fully initialized
-    Timer::after(Duration::from_secs(2)).await;
+    Timer::after(Duration::from_secs(3)).await; // Increased from 2s to 3s
     info!("Network initialization delay completed");
+
+    // Additional network stability check
+    Timer::after(Duration::from_millis(500)).await;
+    info!("Additional network stability delay completed");
 
     let sync_result = sync_time().await;
     if !sync_result {
@@ -354,8 +370,12 @@ pub async fn send_report(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     info!("Wifi netif up");
 
     // Add delay to ensure network is fully initialized
-    Timer::after(Duration::from_secs(2)).await;
+    Timer::after(Duration::from_secs(3)).await; // Increased from 2s to 3s
     info!("Network initialization delay completed");
+
+    // Additional network stability check
+    Timer::after(Duration::from_millis(500)).await;
+    info!("Additional network stability delay completed");
 
     send_report_without_wifi().await?;
 
@@ -366,10 +386,38 @@ pub async fn send_report(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
 }
 
 async fn send_report_without_wifi() -> anyhow::Result<()> {
+    const MAX_RETRIES: usize = 3;
+    const RETRY_DELAY_MS: u64 = 5000; // 5 seconds between retries
+
+    for attempt in 1..=MAX_RETRIES {
+        info!("Attempting to send report (attempt {attempt}/{MAX_RETRIES})");
+
+        match try_send_report().await {
+            Ok(status) => {
+                info!("Report sent successfully with status: {status}");
+                return Ok(());
+            }
+            Err(e) => {
+                warn!("Attempt {attempt} failed: {e:?}");
+                if attempt < MAX_RETRIES {
+                    info!("Retrying in {} seconds...", RETRY_DELAY_MS / 1000);
+                    Timer::after(Duration::from_millis(RETRY_DELAY_MS)).await;
+                } else {
+                    warn!("All {MAX_RETRIES} attempts failed, giving up");
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    unreachable!()
+}
+
+async fn try_send_report() -> anyhow::Result<u16> {
     let connection = EspHttpConnection::new(&HttpConfiguration {
         use_global_ca_store: true,
         crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
-        timeout: Some(StdDuration::from_secs(10)),
+        timeout: Some(StdDuration::from_secs(30)), // Increased from 10s to 30s
         ..Default::default()
     })?;
     let mut client = Client::wrap(connection);
@@ -383,8 +431,11 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
     let url = "https://hangulclock.homin.dev/v1/live-status";
     info!("Attempting to connect to {url}");
     info!("Before client.request");
+
+    // Add network status check before making request
+    info!("Network status check - attempting to create HTTP request");
     let mut request = client.request(Method::Post, url.as_ref(), &headers)?;
-    info!("After client.request");
+    info!("After client.request - HTTP request created successfully");
 
     info!("Sending report data");
     let report_json = report::status_report().await?;
@@ -392,12 +443,13 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
     request.flush()?;
 
     info!("Waiting for response");
+    info!("Submitting HTTP request - this may take up to 30 seconds...");
     let response = request.submit()?;
     let status = response.status();
 
-    info!("Response code: {status}");
+    info!("Response received successfully with status: {status}");
 
-    Ok(())
+    Ok(status)
 }
 
 async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
@@ -432,8 +484,12 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
     info!("Wifi netif up");
 
     // Add delay to ensure network is fully initialized
-    Timer::after(Duration::from_secs(2)).await;
+    Timer::after(Duration::from_secs(3)).await; // Increased from 2s to 3s
     info!("Network initialization delay completed");
+
+    // Additional network stability check
+    Timer::after(Duration::from_millis(500)).await;
+    info!("Additional network stability delay completed");
 
     let ota_result = ota_update::ota_update().await;
     match ota_result {

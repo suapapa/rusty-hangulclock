@@ -13,14 +13,16 @@ pub async fn ota_update() -> anyhow::Result<()> {
     let ping_url = "https://hangulclock.homin.dev/v1/ping";
     let mut ping_success = false;
     for attempt in 1..=10 {
+        info!("Ping attempt {attempt}: attempting to connect to {ping_url}");
         let connection = EspHttpConnection::new(&HttpConfiguration {
             use_global_ca_store: true,
             crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
-            timeout: Some(StdDuration::from_secs(10)),
+            timeout: Some(StdDuration::from_secs(30)), // Increased from 10s to 30s
             ..Default::default()
         })?;
         let mut client = Client::wrap(connection);
         let request = client.request(Method::Get, ping_url, &[])?;
+        info!("Ping attempt {attempt}: submitting request (may take up to 30s)...");
         let response = request.submit()?;
         info!("Ping attempt {}: status {}", attempt, response.status());
         if response.status() == 200 {
@@ -28,6 +30,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
             break;
         }
         if attempt < 10 {
+            info!("Ping failed, retrying in 10 seconds...");
             Timer::after(Duration::from_secs(10)).await;
         }
     }
@@ -38,7 +41,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
     let connection = EspHttpConnection::new(&HttpConfiguration {
         use_global_ca_store: true,
         crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
-        timeout: Some(StdDuration::from_secs(10)),
+        timeout: Some(StdDuration::from_secs(30)), // Increased from 10s to 30s
         ..Default::default()
     })?;
     let mut client = Client::wrap(connection);
@@ -47,8 +50,10 @@ pub async fn ota_update() -> anyhow::Result<()> {
         global::get_sw_version(),
         global::get_hw_revision(),
     );
-    info!("Attempting to connect to {url}");
-    let request = client.request(Method::Get, url.as_ref(), &[] /* &headers */)?;
+
+    info!("Creating HTTP request for update (may take up to 30s to connect)...");
+    let request = client.request(Method::Get, url.as_ref(), &[])?;
+    info!("HTTP request created, now submitting (connection phase)...");
     let mut response = request.submit()?;
 
     info!("Response code: {}", response.status());
