@@ -1,10 +1,11 @@
+use std::time::Duration as StdDuration;
+
 use embassy_time::{Duration, Timer};
-use embedded_svc::http::{client::Client, Method};
+use embedded_svc::http::client::Client;
+use embedded_svc::http::Method;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::ota::EspOta;
 use log::info;
-
-use std::time::Duration as StdDuration;
 
 use crate::global;
 
@@ -47,7 +48,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
         global::get_hw_revision(),
     );
     info!("Attempting to connect to {}", url);
-    let request = client.request(Method::Get, url.as_ref(), &[] /*&headers*/)?;
+    let request = client.request(Method::Get, url.as_ref(), &[] /* &headers */)?;
     let mut response = request.submit()?;
 
     info!("Response code: {}", response.status());

@@ -1,10 +1,11 @@
 // use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
-use lazy_static::lazy_static;
 use std::sync::{
     // mpsc::{self, Receiver, Sender},
     Mutex,
 };
 use std::time;
+
+use lazy_static::lazy_static;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RotaryEvent {

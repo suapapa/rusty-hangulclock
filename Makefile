@@ -3,7 +3,7 @@ export RUSTY_HANGULCLOCK_SW_VERSION=7
 export RUSTY_HANGULCLOCK_HW_REVISION=4
 export RUSTY_HANGULCLOCK_TOKEN=your_token_here
 
-.PHONY: flash_dotstar flash build ota_bin erase_nvs
+.PHONY: flash_dotstar flash build ota_bin erase_nvs clippy fmt audit deny check-all
 
 flash_dotstar:
 	source ~/export-esp.sh
@@ -31,3 +31,30 @@ monitor:
 clean:
 	rm -rf release
 	cargo clean
+
+# Static analysis targets
+clippy:
+	cargo clippy --target riscv32imc-esp-espidf
+
+fmt:
+	cargo fmt
+
+fmt-check:
+	cargo fmt --check
+
+audit:
+	cargo audit
+
+deny:
+	cargo deny check
+
+check-all: clippy fmt-check audit deny
+	@echo "✅ All static analysis checks passed!"
+
+# Development workflow
+dev-check: fmt-check clippy
+	@echo "✅ Development checks passed!"
+
+# Pre-commit hook (run this before committing)
+pre-commit: check-all
+	@echo "✅ Pre-commit checks passed!"

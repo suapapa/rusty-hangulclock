@@ -1,22 +1,18 @@
-use crate::global;
-use crate::nvs;
-use crate::ota_update;
-use crate::report;
-use crate::web_server;
+use std::time::Duration as StdDuration;
 
 use embassy_time::{Duration, Timer};
-use embedded_svc::http::{client::Client, Method};
+use embedded_svc::http::client::Client;
+use embedded_svc::http::Method;
 use embedded_svc::wifi::{
     AccessPointConfiguration, AuthMethod, ClientConfiguration, Configuration,
 };
 use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::sntp;
-use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
-use esp_idf_svc::wifi::{WpsConfig, WpsFactoryInfo, WpsStatus, WpsType};
+use esp_idf_svc::wifi::{AsyncWifi, EspWifi, WpsConfig, WpsFactoryInfo, WpsStatus, WpsType};
 use log::{info, warn};
 
-use std::time::Duration as StdDuration;
+use crate::{global, nvs, ota_update, report, web_server};
 
 pub const fn get_api_token() -> &'static str {
     match option_env!("RUSTY_HANGULCLOCK_TOKEN") {

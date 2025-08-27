@@ -1,17 +1,17 @@
+use std::sync::{Arc, Mutex};
+
 #[cfg(feature = "dotstar")]
 use apa102_spi::Apa102;
+use embedded_hal::spi::SpiBus;
+// use once_cell::sync::Lazy;
+use esp_idf_svc::hal::interrupt;
+use log::info;
+use smart_leds::hsv::{hsv2rgb, Hsv};
+use smart_leds::{gamma, SmartLedsWrite, RGB8};
 #[cfg(feature = "neopixel")]
 use ws2812_spi::Ws2812;
 
-use embedded_hal::spi::SpiBus;
-use log::info;
-// use once_cell::sync::Lazy;
-use esp_idf_svc::hal::interrupt;
-use smart_leds::{gamma, hsv::hsv2rgb, hsv::Hsv, SmartLedsWrite, RGB8};
-use std::sync::{Arc, Mutex};
-
-use crate::global;
-use crate::nvs;
+use crate::{global, nvs};
 
 const LED_NUM: usize = 25;
 // const DEFAULT_BRIGHTNESS: u8 = 100;

@@ -41,7 +41,8 @@ pub fn get_wifi_cred() -> anyhow::Result<(String, String)> {
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
     };
 
-    // String values are limited in the IDF to 4000 bytes, but our buffer is shorter.
+    // String values are limited in the IDF to 4000 bytes, but our buffer is
+    // shorter.
     const MAX_STR_LEN: usize = 100;
     let ssid_tag = "ssid";
     let pass_tag = "pass";
@@ -224,7 +225,8 @@ pub fn get_device_id() -> anyhow::Result<String> {
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
     };
 
-    // String values are limited in the IDF to 4000 bytes, but our buffer is shorter.
+    // String values are limited in the IDF to 4000 bytes, but our buffer is
+    // shorter.
     const MAX_STR_LEN: usize = 100;
     let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
 

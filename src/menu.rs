@@ -1,5 +1,5 @@
-use crate::global;
-use crate::nvs;
+use std::time;
+
 use embassy_time::{Duration, Timer};
 use esp_idf_svc::hal::i2c::*;
 use esp_idf_svc::hal::reset::restart;
@@ -7,7 +7,8 @@ use esp_idf_svc::hal::reset::restart;
 // use crate::panel::LED_WRITE_LOCK;
 use log::info;
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
-use std::time;
+
+use crate::{global, nvs};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MenuOption {
@@ -290,25 +291,33 @@ pub async fn menu_loop(
                                                 }
 
                                                 //     if let Ok(mut result) =
-                                                //         global::RESULT_NET.try_lock()
+                                                //         global::RESULT_NET.
+                                                // try_lock()
                                                 //     {
-                                                //         if result.as_str() == "OK"
-                                                //             || result.as_str() == "NG"
+                                                //         if result.as_str() ==
+                                                // "OK"             ||
+                                                // result.as_str() == "NG"
                                                 //         {
-                                                //             info!("AP cmd completed");
+                                                //             info!("AP cmd
+                                                // completed");
                                                 //             draw_text(
                                                 //                 disp,
                                                 //                 &format!(
-                                                //                     "MENU {}/{}\nAP\n**{}**",
-                                                //                     current_menu.index() + 1,
+                                                //                     "MENU
+                                                // {}/{}\nAP\n**{}**",
+                                                //
+                                                // current_menu.index() + 1,
                                                 //                     menu_len,
-                                                //                     result.as_str(),
+                                                //
+                                                // result.as_str(),
                                                 //                 ),
                                                 //             )?;
-                                                //             Timer::after(Duration::from_millis(1000))
+                                                //
+                                                // Timer::after(Duration::from_millis(1000))
                                                 //                 .await;
                                                 //             *in_menu = false;
-                                                //             *result = "".to_string();
+                                                //             *result =
+                                                // "".to_string();
                                                 //             break;
                                                 //         }
                                                 //     }
@@ -452,18 +461,18 @@ fn get_ts() -> u128 {
     timestamp
 }
 
-use once_cell::sync::Lazy;
 use std::sync::Mutex;
+
+use once_cell::sync::Lazy;
 
 static LAST_TEXT: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
 
 pub fn draw_text(disp: &mut Sh1106GM<I2cInterface<I2cDriver>>, text: &str) -> anyhow::Result<()> {
-    use embedded_graphics::{
-        mono_font::{ascii::FONT_6X13, MonoTextStyleBuilder},
-        pixelcolor::BinaryColor,
-        prelude::*,
-        text::{Alignment, Text},
-    };
+    use embedded_graphics::mono_font::ascii::FONT_6X13;
+    use embedded_graphics::mono_font::MonoTextStyleBuilder;
+    use embedded_graphics::pixelcolor::BinaryColor;
+    use embedded_graphics::prelude::*;
+    use embedded_graphics::text::{Alignment, Text};
 
     // Wait for any LED write operations to complete
     // let _read_guard = LED_WRITE_LOCK.read().unwrap();

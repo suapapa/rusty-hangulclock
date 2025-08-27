@@ -1,8 +1,7 @@
 use log::info;
 use serde_json::json;
 
-use crate::global;
-use crate::nvs;
+use crate::{global, nvs};
 
 pub async fn status_report() -> anyhow::Result<String> {
     let device_id = nvs::get_device_id()?;

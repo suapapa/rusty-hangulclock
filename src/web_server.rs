@@ -47,7 +47,7 @@ pub async fn start_web_server() -> anyhow::Result<()> {
 
             let post_data = String::from_utf8_lossy(&buffer[..total_read]);
             info!("Received POST data length: {} bytes", total_read);
-            
+
             // Only log first 100 chars to avoid excessive logging
             if post_data.len() > 100 {
                 info!("POST data preview: {}...", &post_data[..100]);
@@ -77,9 +77,9 @@ pub async fn start_web_server() -> anyhow::Result<()> {
 
             // Call NVS function to store WiFi credentials
             if !ssid.is_empty() && !pass.is_empty() {
-                info!("Attempting to store WiFi credentials - SSID: {} ({} chars), Password: {} chars", 
+                info!("Attempting to store WiFi credentials - SSID: {} ({} chars), Password: {} chars",
                       ssid, ssid.len(), pass.len());
-                
+
                 match crate::nvs::set_wifi_cred(&ssid, &pass) {
                     Ok(_) => {
                         info!("WiFi credentials stored successfully");

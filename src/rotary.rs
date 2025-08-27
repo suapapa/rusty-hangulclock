@@ -1,7 +1,8 @@
-use crate::global;
 use embassy_time::{Duration, Ticker, Timer};
 use log::{info, warn};
 use rotary_encoder_hal::{Direction, Rotary};
+
+use crate::global;
 // use crate::panel::LED_WRITE_LOCK;
 
 pub async fn rotary_encoder_loop(
@@ -69,7 +70,8 @@ pub async fn rotary_encoder_loop(
                         _ => {
                             // last_direction = Direction::None;
                             // debounce_count = 0;
-                            // if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
+                            // if let Ok(mut event) =
+                            // global::ROTARY_EVENT.try_lock() {
                             //     *event = global::RotaryEvent::None;
                             // }
                         }

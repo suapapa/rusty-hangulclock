@@ -1,0 +1,24 @@
+# Rustfmt configuration for rusty-hangulclock
+# Embedded Rust project formatting preferences
+
+# Code style
+edition = "2021"
+max_width = 100
+tab_spaces = 4
+newline_style = "Unix"
+
+# Formatting options
+use_small_heuristics = "Default"
+remove_nested_parens = true
+merge_derives = true
+use_try_shorthand = true
+use_field_init_shorthand = true
+
+# Comments
+wrap_comments = true
+comment_width = 80
+
+# Imports
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+reorder_imports = true

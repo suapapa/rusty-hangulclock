@@ -8,27 +8,28 @@ mod report;
 mod rotary;
 mod web_server;
 
-use chrono::prelude::*;
-use embassy_time::{Duration, Timer};
-// use embedded_hal::spi::MODE_3;
-use esp_idf_svc::hal::gpio::*;
-use esp_idf_svc::hal::i2c::*;
-use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_svc::hal::prelude::*;
-use esp_idf_svc::hal::spi::{
-    config::Config as SpiConfig, config::DriverConfig as SpiDriverConfig, SpiBusDriver, SpiDriver,
-};
-use esp_idf_svc::hal::task;
-use esp_idf_svc::timer::EspTaskTimerService;
-use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
-use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
-use log::{debug, info, warn};
-use sh1106::{prelude::GraphicsMode as Sh1106GM, Builder as Sh1106Builder};
 // use smart_leds::{gamma, hsv::hsv2rgb, hsv::Hsv, SmartLedsWrite, RGB8};
 use std::time;
 
 #[cfg(feature = "dotstar")]
 use apa102_spi::MODE as SPI_MODE;
+use chrono::prelude::*;
+use embassy_time::{Duration, Timer};
+use esp_idf_svc::eventloop::EspSystemEventLoop;
+// use embedded_hal::spi::MODE_3;
+use esp_idf_svc::hal::gpio::*;
+use esp_idf_svc::hal::i2c::*;
+use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::prelude::*;
+use esp_idf_svc::hal::spi::config::{Config as SpiConfig, DriverConfig as SpiDriverConfig};
+use esp_idf_svc::hal::spi::{SpiBusDriver, SpiDriver};
+use esp_idf_svc::hal::task;
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
+use esp_idf_svc::timer::EspTaskTimerService;
+use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
+use log::{debug, info, warn};
+use sh1106::prelude::GraphicsMode as Sh1106GM;
+use sh1106::Builder as Sh1106Builder;
 #[cfg(feature = "neopixel")]
 use ws2812_spi::MODE as SPI_MODE;
 
