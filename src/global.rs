@@ -57,32 +57,21 @@ pub fn get_uptime() -> u128 {
         }
         _ => {
             // 오버플로우 방지를 위한 안전한 계산
-            if timestamp >= boot_time {
-                timestamp - boot_time
-            } else {
-                // 오버플로우 발생 시 0 반환
-                0
-            }
+            timestamp.saturating_sub(boot_time)
         }
     }
 }
 
 pub fn get_sw_version() -> i32 {
-    match option_env!("RUSTY_HANGULCLOCK_SW_VERSION") {
-        Some(s) => match s.parse::<i32>() {
-            Ok(v) => v,
-            Err(_) => 0,
-        },
-        None => 0,
-    }
+    option_env!("RUSTY_HANGULCLOCK_SW_VERSION")
+        .unwrap_or_default()
+        .parse::<i32>()
+        .unwrap_or_default()
 }
 
 pub fn get_hw_revision() -> i32 {
-    match option_env!("RUSTY_HANGULCLOCK_HW_REVISION") {
-        Some(s) => match s.parse::<i32>() {
-            Ok(v) => v,
-            Err(_) => 0,
-        },
-        None => 0,
-    }
+    option_env!("RUSTY_HANGULCLOCK_HW_REVISION")
+        .unwrap_or_default()
+        .parse::<i32>()
+        .unwrap_or_default()
 }

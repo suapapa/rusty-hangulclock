@@ -30,7 +30,7 @@ pub async fn net_loop(
     match sync_time_with_wifi(wifi).await {
         Ok(_) => (),
         Err(e) => {
-            warn!("Failed to sync time: {:?}", e);
+            warn!("Failed to sync time: {e:?}");
         }
     }
 
@@ -68,7 +68,7 @@ pub async fn net_loop(
                             ap_mode = true;
                         }
                         Err(e) => {
-                            warn!("Failed to connect to wifi with ap: {:?}", e);
+                            warn!("Failed to connect to wifi with ap: {e:?}");
                             *cmd_net = "".to_string();
                             let mut result = global::RESULT_NET.lock().unwrap();
                             *result = "NG".to_string();
@@ -85,7 +85,7 @@ pub async fn net_loop(
                             *result = "OK".to_string();
                         }
                         Err(e) => {
-                            warn!("Failed to connect to wifi with wps: {:?}", e);
+                            warn!("Failed to connect to wifi with wps: {e:?}");
                             *cmd_net = "".to_string();
                             let mut result = global::RESULT_NET.lock().unwrap();
                             *result = "NG".to_string();
@@ -104,7 +104,7 @@ pub async fn net_loop(
                             *result = "OK".to_string();
                         }
                         Err(e) => {
-                            warn!("Failed to sync time: {:?}", e);
+                            warn!("Failed to sync time: {e:?}");
                             *cmd_net = "".to_string();
                             let mut result = global::RESULT_NET.lock().unwrap();
                             *result = "NG".to_string();
@@ -121,7 +121,7 @@ pub async fn net_loop(
                             *result = "OK".to_string();
                         }
                         Err(e) => {
-                            warn!("Failed to update: {:?}", e);
+                            warn!("Failed to update: {e:?}");
                             *cmd_net = "".to_string();
                             let mut result = global::RESULT_NET.lock().unwrap();
                             *result = "NG".to_string();
@@ -261,7 +261,7 @@ pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyh
             wifi.set_configuration(&wifi_configuration)?;
         }
         Err(e) => {
-            warn!("Failed to load wifi cred: {:?}", e);
+            warn!("Failed to load wifi cred: {e:?}");
             return Err(e);
         }
     }
@@ -340,7 +340,7 @@ pub async fn send_report(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
             wifi.set_configuration(&wifi_configuration)?;
         }
         Err(e) => {
-            warn!("Failed to load wifi cred: {:?}", e);
+            warn!("Failed to load wifi cred: {e:?}");
             return Err(e);
         }
     }
@@ -384,7 +384,7 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
     ];
 
     let url = "https://hangulclock.homin.dev/v1/live-status";
-    info!("Attempting to connect to {}", url);
+    info!("Attempting to connect to {url}");
     info!("Before client.request");
     let mut request = client.request(Method::Post, url.as_ref(), &headers)?;
     info!("After client.request");
@@ -398,7 +398,7 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
     let response = request.submit()?;
     let status = response.status();
 
-    info!("Response code: {}", status);
+    info!("Response code: {status}");
 
     Ok(())
 }
@@ -418,7 +418,7 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
             wifi.set_configuration(&wifi_configuration)?;
         }
         Err(e) => {
-            warn!("Failed to load wifi cred: {:?}", e);
+            warn!("Failed to load wifi cred: {e:?}");
             return Err(e);
         }
     }
@@ -441,7 +441,7 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
     let ota_result = ota_update::ota_update().await;
     match ota_result {
         Err(e) => {
-            warn!("Failed to update: {:?}", e);
+            warn!("Failed to update: {e:?}");
             wifi.stop().await?;
             info!("Wifi stopped");
             Err(anyhow::anyhow!("OTA update completed"))

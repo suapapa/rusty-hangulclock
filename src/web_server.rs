@@ -39,20 +39,20 @@ pub async fn start_web_server() -> anyhow::Result<()> {
                         }
                     }
                     Err(e) => {
-                        warn!("Error reading POST data: {}", e);
+                        warn!("Error reading POST data: {e}");
                         break;
                     }
                 }
             }
 
             let post_data = String::from_utf8_lossy(&buffer[..total_read]);
-            info!("Received POST data length: {} bytes", total_read);
+            info!("Received POST data length: {total_read} bytes");
 
             // Only log first 100 chars to avoid excessive logging
             if post_data.len() > 100 {
                 info!("POST data preview: {}...", &post_data[..100]);
             } else {
-                info!("POST data: {}", post_data);
+                info!("POST data: {post_data}");
             }
 
             // Parse form data (simple key=value&key=value format)
@@ -88,15 +88,15 @@ pub async fn start_web_server() -> anyhow::Result<()> {
                         response.write(response_html.as_bytes())?;
                     }
                     Err(e) => {
-                        warn!("Failed to store WiFi credentials: {}", e);
+                        warn!("Failed to store WiFi credentials: {e}");
                         let response_html =
-                            error_html(&format!("Failed to store credentials: {}", e));
+                            error_html(&format!("Failed to store credentials: {e}"));
                         let mut response = request.into_ok_response()?;
                         response.write(response_html.as_bytes())?;
                     }
                 }
             } else {
-                warn!("Empty SSID or password received - SSID: '{}', Password: '{}'", ssid, pass);
+                warn!("Empty SSID or password received - SSID: '{ssid}', Password: '{pass}'");
                 let response_html = error_html("SSID and password are required");
                 let mut response = request.into_ok_response()?;
                 response.write(response_html.as_bytes())?;
@@ -123,7 +123,7 @@ pub async fn start_web_server() -> anyhow::Result<()> {
         |request| -> core::result::Result<(), EspIOError> {
             let cred_html = match crate::nvs::get_wifi_cred() {
                 Ok((ssid, _)) => {
-                    format!("<p><strong>SSID:</strong> {}</p>", ssid)
+                    format!("<p><strong>SSID:</strong> {ssid}</p>")
                 }
                 Err(_) => "<p style='color: #999;'>저장된 WiFi 정보가 없습니다.</p>".to_string(),
             };
@@ -213,10 +213,10 @@ fn index_html() -> String {
 }
 
 fn success_html(ssid: &str) -> String {
-    templated(&format!(
+    templated(format!(
         r#"
             <h2 style="color: #4CAF50;">✅ WiFi 설정이 저장되었습니다!</h2>
-            <p><strong>SSID:</strong> {}</p>
+            <p><strong>SSID:</strong> {ssid}</p>
             <p>이제 디바이스가 재부팅되면 해당 WiFi에 연결을 시도합니다.</p>
             <button onclick="window.location.href='/'" style="display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; text-decoration: none; margin-top: 15px; border: none; cursor: pointer; border-radius: 4px;">
                 돌아가기
@@ -227,21 +227,19 @@ fn success_html(ssid: &str) -> String {
                     window.location.href = '/';
                 }}, 5000);
             </script>
-            "#,
-        ssid
+            "#
     ))
 }
 
 fn error_html(message: &str) -> String {
-    templated(&format!(
+    templated(format!(
         r#"
             <h2 style="color: #f44336;">❌ 오류가 발생했습니다</h2>
-            <p>{}</p>
+            <p>{message}</p>
             <a href="/" style="display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; text-decoration: none; margin-top: 15px;">
                 다시 시도
             </a>
-            "#,
-        message
+            "#
     ))
 }
 

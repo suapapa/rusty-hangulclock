@@ -151,7 +151,7 @@ fn main() -> anyhow::Result<()> {
             rotary_encoder_task,
         ) {
             Ok(_) => info!("All tasks completed"),
-            Err(e) => info!("Error in task: {:?}", e),
+            Err(e) => info!("Error in task: {e:?}"),
         }
     });
 
@@ -310,7 +310,7 @@ where
                     debug!("Failed to update global M value");
                 }
             }
-            debug!("Time updated, h: {}, m: {}", h, m);
+            debug!("Time updated, h: {h}, m: {m}");
             sleds.show_time(h, m);
         }
         Timer::after(Duration::from_secs(1)).await;

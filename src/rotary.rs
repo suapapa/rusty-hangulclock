@@ -78,7 +78,7 @@ pub async fn rotary_encoder_loop(
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to update rotary encoder: {:?}", e);
+                    warn!("Failed to update rotary encoder: {e:?}");
                     // 에러 발생 시 짧은 대기
                     Timer::after(Duration::from_millis(50)).await;
                 }

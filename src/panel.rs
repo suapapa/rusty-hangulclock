@@ -64,13 +64,13 @@ impl<SPI: SpiBus> Sleds<SPI> {
         }
 
         let mut data = [RGB8::default(); LED_NUM];
-        for i in 0..LED_NUM {
+        for item in data.iter_mut().take(LED_NUM) {
             let color = hsv2rgb(Hsv {
                 hue: hue as u8,
                 sat: 255,
                 val: 255, // 128
             });
-            data[i] = color;
+            *item = color;
             hue = (hue + 256 / LED_NUM as u16) % 256;
         }
         self.sleds
@@ -82,7 +82,7 @@ impl<SPI: SpiBus> Sleds<SPI> {
 
         // load default hsv
         let (hue, sat, val) = nvs::get_hsv().unwrap();
-        info!("hue: {}, sat: {}, val: {}", hue, sat, val);
+        info!("hue: {hue}, sat: {sat}, val: {val}");
         *global::LED_HUE.lock().unwrap() = hue;
         *global::LED_SAT.lock().unwrap() = sat;
         *global::LED_VAL.lock().unwrap() = val;
@@ -95,9 +95,9 @@ impl<SPI: SpiBus> Sleds<SPI> {
         let mut m10 = m / 10;
         let mut m1 = m % 10;
         match m1 {
-            1 | 2 | 3 => m1 = 0,
-            4 | 5 | 6 => m1 = 5,
-            7 | 8 | 9 => {
+            1..=3 => m1 = 0,
+            4..=6 => m1 = 5,
+            7..=9 => {
                 m1 = 0;
                 m10 += 1;
                 if m10 == 6 {

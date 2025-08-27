@@ -18,6 +18,6 @@ pub async fn status_report() -> anyhow::Result<String> {
         "boot_count": boot_count,
     });
 
-    info!("Report: {}", report_json);
+    info!("Report: {report_json}");
     Ok(report_json.to_string())
 }

@@ -8,7 +8,7 @@ pub fn set_wifi_cred(ssid: &str, pass: &str) -> anyhow::Result<()> {
     let ns = "cred_ns";
     let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -17,11 +17,11 @@ pub fn set_wifi_cred(ssid: &str, pass: &str) -> anyhow::Result<()> {
     let ssid_tag = "ssid";
     let pass_tag = "pass";
     match nvs.set_str(ssid_tag, ssid) {
-        Ok(_) => info!("{:?} updated", ssid_tag),
+        Ok(_) => info!("{ssid_tag:?} updated"),
         Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", ssid_tag, e)),
     };
     match nvs.set_str(pass_tag, pass) {
-        Ok(_) => info!("{:?} updated", pass_tag),
+        Ok(_) => info!("{pass_tag:?} updated"),
         Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", pass_tag, e)),
     };
 
@@ -35,7 +35,7 @@ pub fn get_wifi_cred() -> anyhow::Result<(String, String)> {
     let ns = "cred_ns";
     let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -51,7 +51,7 @@ pub fn get_wifi_cred() -> anyhow::Result<(String, String)> {
     let pass: String;
 
     let ssid_str_len: usize = nvs.str_len(ssid_tag).map_or(0, |v| {
-        info!("Got stored string length of {:?}", v);
+        info!("Got stored string length of {v:?}");
         let vv = v.unwrap_or(0);
         if vv >= MAX_STR_LEN {
             info!("Too long, trimming");
@@ -62,25 +62,25 @@ pub fn get_wifi_cred() -> anyhow::Result<(String, String)> {
     });
     match ssid_str_len == 0 {
         true => {
-            info!("{:?} does not seem to exist", ssid_tag);
+            info!("{ssid_tag:?} does not seem to exist");
             return Err(anyhow::anyhow!("Failed to get {:?}", ssid_tag));
         }
         false => {
             let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
             match nvs.get_str(ssid_tag, &mut buffer).unwrap() {
                 Some(v) => {
-                    info!("{:?} = {:?}", ssid_tag, v);
+                    info!("{ssid_tag:?} = {v:?}");
                     ssid = v.to_string();
                 }
                 None => {
-                    info!("We got nothing from {:?}", ssid_tag);
+                    info!("We got nothing from {ssid_tag:?}");
                     return Err(anyhow::anyhow!("Failed to get {:?}", ssid_tag));
                 }
             };
         }
     };
     let pass_str_len: usize = nvs.str_len(pass_tag).map_or(0, |v| {
-        info!("Got stored string length of {:?}", v);
+        info!("Got stored string length of {v:?}");
         let vv = v.unwrap_or(0);
         if vv >= MAX_STR_LEN {
             info!("Too long, trimming");
@@ -91,18 +91,18 @@ pub fn get_wifi_cred() -> anyhow::Result<(String, String)> {
     });
     match pass_str_len == 0 {
         true => {
-            info!("{:?} does not seem to exist", pass_tag);
+            info!("{pass_tag:?} does not seem to exist");
             return Err(anyhow::anyhow!("Failed to get {:?}", pass_tag));
         }
         false => {
             let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
             match nvs.get_str(pass_tag, &mut buffer).unwrap() {
                 Some(v) => {
-                    info!("{:?} = {:?}", pass_tag, v);
+                    info!("{pass_tag:?} = {v:?}");
                     pass = v.to_string();
                 }
                 None => {
-                    info!("We got nothing from {:?}", pass_tag);
+                    info!("We got nothing from {pass_tag:?}");
                     return Err(anyhow::anyhow!("Failed to get {:?}", pass_tag));
                 }
             };
@@ -119,7 +119,7 @@ pub fn set_hsv(hue: u8, sat: u8, val: u8) -> anyhow::Result<()> {
     let ns = "hsv_ns";
     let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -130,15 +130,15 @@ pub fn set_hsv(hue: u8, sat: u8, val: u8) -> anyhow::Result<()> {
     let val_tag = "val";
 
     match nvs.set_u8(hue_tag, hue) {
-        Ok(_) => info!("{:?} updated", hue_tag),
+        Ok(_) => info!("{hue_tag:?} updated"),
         Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", hue_tag, e)),
     };
     match nvs.set_u8(sat_tag, sat) {
-        Ok(_) => info!("{:?} updated", sat_tag),
+        Ok(_) => info!("{sat_tag:?} updated"),
         Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", sat_tag, e)),
     };
     match nvs.set_u8(val_tag, val) {
-        Ok(_) => info!("{:?} updated", val_tag),
+        Ok(_) => info!("{val_tag:?} updated"),
         Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", val_tag, e)),
     };
     Ok(())
@@ -151,7 +151,7 @@ pub fn get_hsv() -> anyhow::Result<(u8, u8, u8)> {
     let ns = "hsv_ns";
     let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -175,7 +175,7 @@ pub fn set_utc_offset(offset: i32) -> anyhow::Result<()> {
     let ns = "utc_offset_ns";
     let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -183,7 +183,7 @@ pub fn set_utc_offset(offset: i32) -> anyhow::Result<()> {
 
     let offset_tag = "offset";
     match nvs.set_i32(offset_tag, offset) {
-        Ok(_) => info!("{:?} updated", offset_tag),
+        Ok(_) => info!("{offset_tag:?} updated"),
         Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", offset_tag, e)),
     };
 
@@ -197,7 +197,7 @@ pub fn get_utc_offset() -> anyhow::Result<i32> {
     let ns = "utc_offset_ns";
     let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -219,7 +219,7 @@ pub fn get_device_id() -> anyhow::Result<String> {
     let ns = "device_id_ns";
     let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -240,12 +240,12 @@ pub fn get_device_id() -> anyhow::Result<String> {
                 .to_rfc3339();
 
             let random = rand::random::<u32>();
-            let new_id = format!("{}-{:x}", rfc3339_timestamp, random);
+            let new_id = format!("{rfc3339_timestamp}-{random:x}");
 
             // Store the new ID in NVS
             match nvs.set_str("device_id", &new_id) {
                 Ok(_) => {
-                    info!("New device ID generated and stored: {}", new_id);
+                    info!("New device ID generated and stored: {new_id}");
                     Ok(new_id)
                 }
                 Err(e) => Err(anyhow::anyhow!("Failed to store device ID: {:?}", e)),
@@ -261,7 +261,7 @@ pub fn get_boot_count() -> anyhow::Result<u32> {
     let ns = "boot_count_ns";
     let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -287,7 +287,7 @@ pub fn set_boot_count(count: u32) -> anyhow::Result<()> {
     let ns = "boot_count_ns";
     let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -306,7 +306,7 @@ pub fn get_device_no() -> anyhow::Result<String> {
     let ns = "device_no_ns";
     let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
-            info!("Got namespace {:?} from default partition", ns);
+            info!("Got namespace {ns:?} from default partition");
             nvs
         }
         Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
@@ -331,8 +331,5 @@ pub fn get_device_no() -> anyhow::Result<String> {
 }
 
 fn get_device_no_from_env() -> &'static str {
-    match option_env!("RUSTY_HANGULCLOCK_NO") {
-        Some(s) => s,
-        None => "",
-    }
+    option_env!("RUSTY_HANGULCLOCK_NO").unwrap_or_default()
 }

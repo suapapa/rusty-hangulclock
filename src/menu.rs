@@ -110,7 +110,7 @@ pub async fn menu_loop(
                 // let _read_guard = LED_WRITE_LOCK.read().unwrap();
                 let h = *global::CUR_H.lock().unwrap();
                 let m = *global::CUR_M.lock().unwrap();
-                let time_str = format!("{:02}:{:02}", h, m);
+                let time_str = format!("{h:02}:{m:02}");
                 let sw_ver_str = format!("sw-v{}", global::get_sw_version());
 
                 draw_text(
@@ -247,13 +247,13 @@ pub async fn menu_loop(
                         match *event {
                             global::RotaryEvent::Clockwise => {
                                 current_menu = current_menu.next();
-                                info!("Menu changed to: {:?}", current_menu);
+                                info!("Menu changed to: {current_menu:?}");
                                 menu_enter_ts = get_ts();
                                 *event = global::RotaryEvent::None;
                             }
                             global::RotaryEvent::CounterClockwise => {
                                 current_menu = current_menu.prev();
-                                info!("Menu changed to: {:?}", current_menu);
+                                info!("Menu changed to: {current_menu:?}");
                                 menu_enter_ts = get_ts();
                                 *event = global::RotaryEvent::None;
                             }
@@ -456,9 +456,8 @@ pub async fn menu_loop(
 
 fn get_ts() -> u128 {
     let now = time::SystemTime::now();
-    let timestamp = now.duration_since(time::UNIX_EPOCH).unwrap().as_millis();
 
-    timestamp
+    now.duration_since(time::UNIX_EPOCH).unwrap().as_millis()
 }
 
 use std::sync::Mutex;

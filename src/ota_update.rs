@@ -47,7 +47,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
         global::get_sw_version(),
         global::get_hw_revision(),
     );
-    info!("Attempting to connect to {}", url);
+    info!("Attempting to connect to {url}");
     let request = client.request(Method::Get, url.as_ref(), &[] /* &headers */)?;
     let mut response = request.submit()?;
 
@@ -61,7 +61,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
             if n == 0 {
                 break;
             }
-            info!("Writing OTA data: {}", n);
+            info!("Writing OTA data: {n}");
             update.write(&buf[..n]).expect("write OTA data");
         }
         update.complete().expect("complete OTA");
