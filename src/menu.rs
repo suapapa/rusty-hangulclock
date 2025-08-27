@@ -246,19 +246,27 @@ pub async fn menu_loop(
                     ),
                 )?;
 
-                if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
-                    match *event {
+                let (ok, event) = {
+                    if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
+                        let ret = *event;
+                        *event = global::RotaryEvent::None;
+                        (true, ret)
+                    } else {
+                        (false, global::RotaryEvent::None)
+                    }
+                };
+
+                if ok {
+                    match event {
                         global::RotaryEvent::Clockwise => {
                             current_menu = current_menu.next();
                             info!("Menu changed to: {current_menu:?}");
                             menu_enter_ts = get_ts();
-                            *event = global::RotaryEvent::None;
                         }
                         global::RotaryEvent::CounterClockwise => {
                             current_menu = current_menu.prev();
                             info!("Menu changed to: {current_menu:?}");
                             menu_enter_ts = get_ts();
-                            *event = global::RotaryEvent::None;
                         }
                         global::RotaryEvent::None => {
                             if p_sel.is_low().unwrap() {
