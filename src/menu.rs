@@ -394,7 +394,7 @@ pub async fn menu_loop(
                                             };
 
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
-                                                info!("NTP cmd completed");
+                                                info!("OTA cmd completed");
                                                 draw_text(
                                                     disp,
                                                     &format!(
