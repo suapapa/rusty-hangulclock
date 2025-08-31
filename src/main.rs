@@ -75,14 +75,15 @@ fn main() -> anyhow::Result<()> {
     disp.init().unwrap();
 
     let hw_rev = global::get_hw_revision();
+    info!("hw_rev: {}", hw_rev);
     match hw_rev {
-        3 => disp
-            .set_rotation(sh1106::prelude::DisplayRotation::Rotate90)
+        4 => disp
+            .set_rotation(sh1106::prelude::DisplayRotation::Rotate270)
             .unwrap(),
 
-        // 4
+        // 3
         _ => disp
-            .set_rotation(sh1106::prelude::DisplayRotation::Rotate270)
+            .set_rotation(sh1106::prelude::DisplayRotation::Rotate90)
             .unwrap(),
     }
     disp.flush().unwrap();
@@ -179,6 +180,13 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             watchdog_counter = 0;
         }
 
+        // Yield to other tasks periodically
+        if watchdog_counter % 10 == 0 {
+            Timer::after(Duration::from_millis(1)).await;
+            // Reset watchdog using global helper
+            global::reset_task_watchdog();
+        }
+
         // TBD : 2 hours -> 2 days
         if duration.as_secs() > 60 * 60 * 2 {
             last_sync_time = now;
@@ -251,6 +259,13 @@ where
         if watchdog_counter >= WATCHDOG_INTERVAL {
             info!("Show time loop watchdog reset");
             watchdog_counter = 0;
+        }
+
+        // Yield to other tasks periodically
+        if watchdog_counter % 10 == 0 {
+            Timer::after(Duration::from_millis(1)).await;
+            // Reset watchdog using global helper
+            global::reset_task_watchdog();
         }
 
         match global::IN_MENU.try_lock() {

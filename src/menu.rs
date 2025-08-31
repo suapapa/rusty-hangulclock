@@ -12,79 +12,85 @@ use crate::{global, nvs};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MenuOption {
-    Wps,
     Ota,
     LedHue,
     LedSat,
     LedVal,
     UtcOffset,
     ApMode,
+    Wps,
+    Ntp,
     Exit,
 }
 
 impl MenuOption {
     fn as_str(&self) -> &'static str {
         match self {
-            MenuOption::Wps => "WPS",
             MenuOption::Ota => "OTA",
             MenuOption::LedHue => "LED HUE",
             MenuOption::LedSat => "LED SAT",
             MenuOption::LedVal => "LED VAL",
             MenuOption::UtcOffset => "UTC OFFSET",
             MenuOption::ApMode => "AP MODE",
+            MenuOption::Wps => "WPS",
+            MenuOption::Ntp => "NTP",
             MenuOption::Exit => "EXIT",
         }
     }
 
     fn next(&self) -> Self {
         match self {
-            MenuOption::Wps => MenuOption::Ota,
             MenuOption::Ota => MenuOption::LedHue,
             MenuOption::LedHue => MenuOption::LedSat,
             MenuOption::LedSat => MenuOption::LedVal,
             MenuOption::LedVal => MenuOption::UtcOffset,
             MenuOption::UtcOffset => MenuOption::ApMode,
-            MenuOption::ApMode => MenuOption::Exit,
-            MenuOption::Exit => MenuOption::Wps,
+            MenuOption::ApMode => MenuOption::Wps,
+            MenuOption::Wps => MenuOption::Ntp,
+            MenuOption::Ntp => MenuOption::Exit,
+            MenuOption::Exit => MenuOption::Ota,
         }
     }
 
     fn prev(&self) -> Self {
         match self {
-            MenuOption::Wps => MenuOption::Exit,
-            MenuOption::Ota => MenuOption::Wps,
+            MenuOption::Ota => MenuOption::Exit,
             MenuOption::LedHue => MenuOption::Ota,
             MenuOption::LedSat => MenuOption::LedHue,
             MenuOption::LedVal => MenuOption::LedSat,
             MenuOption::UtcOffset => MenuOption::LedVal,
             MenuOption::ApMode => MenuOption::UtcOffset,
-            MenuOption::Exit => MenuOption::ApMode,
+            MenuOption::Wps => MenuOption::ApMode,
+            MenuOption::Ntp => MenuOption::Wps,
+            MenuOption::Exit => MenuOption::Ntp,
         }
     }
 
-    fn all() -> [Self; 8] {
+    fn all() -> [Self; 9] {
         [
-            MenuOption::Wps,
             MenuOption::Ota,
             MenuOption::LedHue,
             MenuOption::LedSat,
             MenuOption::LedVal,
             MenuOption::UtcOffset,
             MenuOption::ApMode,
+            MenuOption::Wps,
+            MenuOption::Ntp,
             MenuOption::Exit,
         ]
     }
 
     fn index(&self) -> usize {
         match self {
-            MenuOption::Wps => 0,
             MenuOption::Ota => 1,
             MenuOption::LedHue => 2,
             MenuOption::LedSat => 3,
             MenuOption::LedVal => 4,
             MenuOption::UtcOffset => 5,
             MenuOption::ApMode => 6,
-            MenuOption::Exit => 7,
+            MenuOption::Wps => 7,
+            MenuOption::Ntp => 7,
+            MenuOption::Exit => 8,
         }
     }
 }
@@ -129,7 +135,7 @@ pub async fn menu_loop(
                             let mut in_menu = global::IN_MENU.lock().unwrap();
                             *in_menu = true;
                         }
-                        current_menu = MenuOption::Wps;
+                        current_menu = MenuOption::Ota;
                         sub_menu = false;
                         menu_enter_ts = get_ts();
                     }
@@ -273,6 +279,62 @@ pub async fn menu_loop(
                                 info!("decide");
                                 menu_enter_ts = get_ts();
                                 match current_menu {
+                                    MenuOption::Ntp => {
+                                        info!("NTP selected");
+                                        match global::CMD_NET.try_lock() {
+                                            Ok(mut cmd_net) => {
+                                                draw_text(
+                                                    disp,
+                                                    &format!(
+                                                        "MENU {}/{}\n**NTP**\n\nwait\na\nmoment",
+                                                        current_menu.index() + 1,
+                                                        menu_len,
+                                                    ),
+                                                )?;
+                                                *cmd_net = "NTP".to_string();
+                                                info!("WPS cmd sent");
+                                            }
+                                            Err(_) => {
+                                                info!("CMD_NET in use");
+                                                continue;
+                                            }
+                                        }
+                                        loop {
+                                            Timer::after(Duration::from_millis(1000)).await;
+
+                                            let result = {
+                                                if let Ok(mut result) =
+                                                    global::RESULT_NET.try_lock()
+                                                {
+                                                    let ret = result.clone();
+                                                    *result = "".to_string();
+                                                    ret
+                                                } else {
+                                                    continue;
+                                                }
+                                            };
+
+                                            if result.as_str() == "OK" || result.as_str() == "NG" {
+                                                info!("NTP cmd completed");
+                                                draw_text(
+                                                    disp,
+                                                    &format!(
+                                                        "MENU {}/{}\nNTP\n**{}**",
+                                                        current_menu.index() + 1,
+                                                        menu_len,
+                                                        result.as_str(),
+                                                    ),
+                                                )?;
+                                                Timer::after(Duration::from_millis(1000)).await;
+                                                {
+                                                    let mut in_menu =
+                                                        global::IN_MENU.lock().unwrap();
+                                                    *in_menu = false;
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
                                     MenuOption::ApMode => {
                                         info!("AP MODE selected");
                                         match global::CMD_NET.try_lock() {
@@ -398,7 +460,7 @@ pub async fn menu_loop(
                                                 draw_text(
                                                     disp,
                                                     &format!(
-                                                        "MENU {}/{}\nNTP\n**{}**",
+                                                        "MENU {}/{}\nOTA\n**{}**",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                         result.as_str(),

@@ -169,21 +169,30 @@ impl<SPI: SpiBus> Sleds<SPI> {
 
         // let _write_guard = LED_WRITE_LOCK.write().unwrap();
 
-        critical_section::with(|_| {
-            let mut data = [RGB8::default(); LED_NUM];
-            let led_rgb = hsv2rgb(led_hsv);
-            for l in remap(leds) {
-                data[l as usize] = led_rgb;
-            }
+        // Minimize critical section time by preparing data outside
+        let mut data = [RGB8::default(); LED_NUM];
+        let led_rgb = hsv2rgb(led_hsv);
+        let remapped_leds = remap(leds);
 
+        // Fill LED data outside critical section
+        for l in remapped_leds {
+            data[l as usize] = led_rgb;
+        }
+
+        // Apply gamma correction outside critical section
+        let gamma_data = gamma(data.iter().cloned());
+
+        critical_section::with(|_| {
             interrupt::free(|| {
-                self.sleds
-                    .lock()
-                    .unwrap()
-                    .write(gamma(data.iter().cloned()))
-                    .unwrap();
+                if let Err(e) = self.sleds.lock().unwrap().write(gamma_data) {
+                    log::warn!("LED write error: {:?}", e);
+                }
             });
         });
+
+        // Use global helper functions for better task management
+        global::yield_to_other_tasks();
+        global::reset_task_watchdog();
     }
 
     pub fn turn_on_all(&mut self) {

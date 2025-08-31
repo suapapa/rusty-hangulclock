@@ -75,3 +75,22 @@ pub fn get_hw_revision() -> i32 {
         .parse::<i32>()
         .unwrap_or_default()
 }
+
+/// Reset the task watchdog timer to prevent timeouts
+pub fn reset_task_watchdog() {
+    #[cfg(target_os = "espidf")]
+    unsafe {
+        esp_idf_svc::sys::esp_task_wdt_reset();
+    }
+}
+
+/// Yield control to other tasks briefly
+pub fn yield_to_other_tasks() {
+    #[cfg(target_os = "espidf")]
+    unsafe {
+        esp_idf_svc::sys::vTaskDelay(1);
+    }
+    
+    #[cfg(not(target_os = "espidf"))]
+    std::thread::sleep(std::time::Duration::from_micros(100));
+}

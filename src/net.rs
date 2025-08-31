@@ -55,9 +55,8 @@ pub async fn net_loop(
 
         {
             let cmd_net = {
-                let mut cmd_net = global::CMD_NET.lock().unwrap();
+                let cmd_net = global::CMD_NET.lock().unwrap();
                 let ret = cmd_net.clone();
-                *cmd_net = "".to_string();
                 ret
             };
 
@@ -132,6 +131,10 @@ pub async fn net_loop(
                     warn!("Unknown command: \"{cmd_net}\"");
                 }
             }
+            {
+                let mut cmd_net = global::CMD_NET.lock().unwrap();
+                *cmd_net = "".to_string();
+            };
         }
 
         // debug_led.set_low().unwrap();
