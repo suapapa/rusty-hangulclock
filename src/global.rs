@@ -90,7 +90,7 @@ pub fn yield_to_other_tasks() {
     unsafe {
         esp_idf_svc::sys::vTaskDelay(1);
     }
-    
+
     #[cfg(not(target_os = "espidf"))]
     std::thread::sleep(std::time::Duration::from_micros(100));
 }

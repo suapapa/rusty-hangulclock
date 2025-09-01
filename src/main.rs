@@ -75,7 +75,7 @@ fn main() -> anyhow::Result<()> {
     disp.init().unwrap();
 
     let hw_rev = global::get_hw_revision();
-    info!("hw_rev: {}", hw_rev);
+    info!("hw_rev: {hw_rev}");
     match hw_rev {
         4 => disp
             .set_rotation(sh1106::prelude::DisplayRotation::Rotate270)
@@ -191,16 +191,10 @@ async fn time_sync_loop() -> anyhow::Result<()> {
         if duration.as_secs() > 60 * 60 * 2 {
             last_sync_time = now;
             info!("Syncing time...");
-            {
-                match global::CMD_NET.try_lock() {
-                    Ok(mut cmd_net) => {
-                        *cmd_net = "NTP".to_string();
-                        info!("NTP cmd sent");
-                    }
-                    Err(_) => {
-                        warn!("CMD_NET in use");
-                    }
-                }
+            if !net::send_net_cmd("NTP") {
+                warn!("Failed to send NTP cmd");
+                Timer::after(Duration::from_secs(1)).await;
+                continue;
             }
 
             // NTP 동기화 루프에 타임아웃 추가

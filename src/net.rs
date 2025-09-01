@@ -56,8 +56,7 @@ pub async fn net_loop(
         {
             let cmd_net = {
                 let cmd_net = global::CMD_NET.lock().unwrap();
-                let ret = cmd_net.clone();
-                ret
+                cmd_net.clone()
             };
 
             match cmd_net.as_str() {
@@ -513,5 +512,19 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
             info!("Wifi stopped");
             Ok(())
         }
+    }
+}
+
+pub fn send_net_cmd(cmd: &str) -> bool {
+    match global::CMD_NET.try_lock() {
+        Ok(mut cmd_net) => {
+            if cmd_net.as_str() != "" {
+                warn!("CMD_NET in use as \"{cmd_net}\"");
+                return false;
+            }
+            *cmd_net = cmd.to_string();
+            true
+        }
+        Err(_) => false,
     }
 }

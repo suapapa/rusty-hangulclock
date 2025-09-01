@@ -5,10 +5,10 @@ use esp_idf_svc::hal::i2c::*;
 use esp_idf_svc::hal::reset::restart;
 // use esp_idf_svc::hal::task;
 // use crate::panel::LED_WRITE_LOCK;
-use log::info;
+use log::{info, warn};
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
 
-use crate::{global, nvs};
+use crate::{global, net, nvs};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MenuOption {
@@ -281,24 +281,20 @@ pub async fn menu_loop(
                                 match current_menu {
                                     MenuOption::Ntp => {
                                         info!("NTP selected");
-                                        match global::CMD_NET.try_lock() {
-                                            Ok(mut cmd_net) => {
-                                                draw_text(
-                                                    disp,
-                                                    &format!(
-                                                        "MENU {}/{}\n**NTP**\n\nwait\na\nmoment",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                    ),
-                                                )?;
-                                                *cmd_net = "NTP".to_string();
-                                                info!("WPS cmd sent");
-                                            }
-                                            Err(_) => {
-                                                info!("CMD_NET in use");
-                                                continue;
-                                            }
+                                        if !net::send_net_cmd("NTP") {
+                                            warn!("Failed to send NTP cmd");
+                                            Timer::after(Duration::from_secs(1)).await;
+                                            continue;
                                         }
+                                        draw_text(
+                                            disp,
+                                            &format!(
+                                                "MENU {}/{}\n**NTP**\n\nwait\na\nmoment",
+                                                current_menu.index() + 1,
+                                                menu_len,
+                                            ),
+                                        )?;
+
                                         loop {
                                             Timer::after(Duration::from_millis(1000)).await;
 
@@ -337,24 +333,19 @@ pub async fn menu_loop(
                                     }
                                     MenuOption::ApMode => {
                                         info!("AP MODE selected");
-                                        match global::CMD_NET.try_lock() {
-                                            Ok(mut cmd_net) => {
-                                                draw_text(
-                                                        disp,
-                                                        &format!(
-                                                            "MENU {}/{}\n**AP MODE**\n\nconnect\nto\n192.168\n.71.1\nfor\nconfig",
-                                                            current_menu.index() + 1,
-                                                            menu_len,
-                                                        ),
-                                                    )?;
-                                                *cmd_net = "AP".to_string();
-                                                info!("AP cmd sent");
-                                            }
-                                            Err(_) => {
-                                                info!("CMD_NET in use");
-                                                continue;
-                                            }
+                                        if !net::send_net_cmd("AP") {
+                                            warn!("Failed to send AP cmd");
+                                            Timer::after(Duration::from_secs(1)).await;
+                                            continue;
                                         }
+                                        draw_text(
+                                            disp,
+                                            &format!(
+                                                "MENU {}/{}\n**AP MODE**\n\nconnect\nto\n192.168\n.71.1\nfor\nconfig",
+                                                current_menu.index() + 1,
+                                                menu_len,
+                                            ),
+                                        )?;
                                         loop {
                                             Timer::after(Duration::from_millis(100)).await;
                                             // if press button, reboot
@@ -366,24 +357,19 @@ pub async fn menu_loop(
                                     }
                                     MenuOption::Wps => {
                                         info!("WPS selected");
-                                        match global::CMD_NET.try_lock() {
-                                            Ok(mut cmd_net) => {
-                                                draw_text(
-                                                    disp,
-                                                    &format!(
-                                                        "MENU {}/{}\n**WPS**\n\nwait\na\nmoment",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                    ),
-                                                )?;
-                                                *cmd_net = "WPS".to_string();
-                                                info!("WPS cmd sent");
-                                            }
-                                            Err(_) => {
-                                                info!("CMD_NET in use");
-                                                continue;
-                                            }
+                                        if !net::send_net_cmd("WPS") {
+                                            warn!("Failed to send WPS cmd");
+                                            Timer::after(Duration::from_secs(1)).await;
+                                            continue;
                                         }
+                                        draw_text(
+                                            disp,
+                                            &format!(
+                                                "MENU {}/{}\n**WPS**\n\nwait\na\nmoment",
+                                                current_menu.index() + 1,
+                                                menu_len,
+                                            ),
+                                        )?;
                                         loop {
                                             Timer::after(Duration::from_millis(1000)).await;
 
@@ -422,24 +408,19 @@ pub async fn menu_loop(
                                     }
                                     MenuOption::Ota => {
                                         info!("OTA selected");
-                                        match global::CMD_NET.try_lock() {
-                                            Ok(mut cmd_net) => {
-                                                draw_text(
-                                                    disp,
-                                                    &format!(
-                                                        "MENU {}/{}\n**OTA**\n\nwait\na\nmoment",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                    ),
-                                                )?;
-                                                *cmd_net = "OTA".to_string();
-                                                info!("OTA cmd sent");
-                                            }
-                                            Err(_) => {
-                                                info!("CMD_NET in use");
-                                                continue;
-                                            }
+                                        if !net::send_net_cmd("OTA") {
+                                            warn!("Failed to send OTA cmd");
+                                            Timer::after(Duration::from_secs(1)).await;
+                                            continue;
                                         }
+                                        draw_text(
+                                            disp,
+                                            &format!(
+                                                "MENU {}/{}\n**OTA**\n\nwait\na\nmoment",
+                                                current_menu.index() + 1,
+                                                menu_len,
+                                            ),
+                                        )?;
                                         loop {
                                             Timer::after(Duration::from_millis(1000)).await;
 

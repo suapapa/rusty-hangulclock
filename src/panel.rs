@@ -185,7 +185,7 @@ impl<SPI: SpiBus> Sleds<SPI> {
         critical_section::with(|_| {
             interrupt::free(|| {
                 if let Err(e) = self.sleds.lock().unwrap().write(gamma_data) {
-                    log::warn!("LED write error: {:?}", e);
+                    log::warn!("LED write error: {e:?}");
                 }
             });
         });
