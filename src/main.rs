@@ -185,7 +185,7 @@ async fn time_sync_loop() -> anyhow::Result<()> {
         if duration.as_secs() > 60 * 60 * 24 * 1 {
             last_sync_time = now;
             info!("Syncing time...");
-            if !net::send_net_cmd("NTP") {
+            if !net::set_net_cmd("NTP") {
                 warn!("Failed to send NTP cmd");
                 Timer::after(Duration::from_secs(1)).await;
                 continue;
@@ -204,10 +204,11 @@ async fn time_sync_loop() -> anyhow::Result<()> {
                     break;
                 }
 
-                if let Ok(mut result) = global::RESULT_NET.try_lock() {
+                let result = net::get_result_net();
+                if result.as_str() == "OK" || result.as_str() == "NG" {
                     if result.as_str() == "OK" || result.as_str() == "NG" {
                         info!("NTP cmd completed: {}", result.as_str());
-                        *result = "".to_string();
+                        net::set_result_net("");
                         break;
                     }
                 }

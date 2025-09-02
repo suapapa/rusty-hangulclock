@@ -5,9 +5,9 @@ use embedded_svc::http::client::Client;
 use embedded_svc::http::Method;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::ota::EspOta;
-use log::info;
+use log::{debug, info};
 
-use crate::global;
+use crate::{global, net};
 
 pub async fn ota_update() -> anyhow::Result<()> {
     let ping_url = "https://hangulclock.homin.dev/v1/ping";
@@ -55,6 +55,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
     let request = client.request(Method::Get, url.as_ref(), &[])?;
     info!("HTTP request created, now submitting (connection phase)...");
     let mut response = request.submit()?;
+    Timer::after(Duration::from_millis(10)).await;
 
     info!("Response code: {}", response.status());
     if response.status() == 200 {
@@ -62,11 +63,20 @@ pub async fn ota_update() -> anyhow::Result<()> {
         let mut ota = EspOta::new().expect("obtain OTA instance");
         let mut update = ota.initiate_update().expect("initiate OTA");
         let mut buf = Box::new([0u8; 4096]);
+        let mut flashing_idx = 0;
+        let spinner = ["-", "\\", "|", "/"];
+        let mut spinner_index = 0;
         while let Ok(n) = response.read(&mut buf[..]) {
             if n == 0 {
                 break;
             }
-            info!("Writing OTA data: {n}");
+            debug!("Writing OTA data: {n}");
+            flashing_idx += 1;
+            if flashing_idx % 5 == 0 {
+                net::set_result_net(spinner[spinner_index]);
+                spinner_index = (spinner_index + 1) % spinner.len();
+                Timer::after(Duration::from_millis(100)).await;
+            }
             update.write(&buf[..n]).expect("write OTA data");
         }
         update.complete().expect("complete OTA");

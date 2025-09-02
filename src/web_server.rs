@@ -102,17 +102,7 @@ pub async fn start_web_server() -> anyhow::Result<()> {
                 response.write(response_html.as_bytes())?;
             }
 
-            // {
-            //     let mut result = global::RESULT_NET.lock().unwrap();
-            //     if success {
-            //         *result = "OK".to_string();
-            //     } else {
-            //         *result = "NG".to_string();
-            //     }
-            // }
-
             Ok(())
-
         },
     )?;
 

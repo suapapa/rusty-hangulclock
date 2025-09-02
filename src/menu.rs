@@ -301,7 +301,7 @@ pub async fn menu_loop(
                                 match current_menu {
                                     MenuOption::Ntp => {
                                         info!("NTP selected");
-                                        if !net::send_net_cmd("NTP") {
+                                        if !net::set_net_cmd("NTP") {
                                             warn!("Failed to send NTP cmd");
                                             Timer::after(Duration::from_secs(1)).await;
                                             continue;
@@ -309,7 +309,7 @@ pub async fn menu_loop(
                                         draw_text(
                                             disp,
                                             &format!(
-                                                "MENU {}/{}\n**NTP**\n\nwait\na\nmoment",
+                                                "MENU {}/{}\n\n**NTP**\n\nwait\na\nmoment",
                                                 current_menu.index() + 1,
                                                 menu_len,
                                             ),
@@ -318,29 +318,19 @@ pub async fn menu_loop(
                                         loop {
                                             Timer::after(Duration::from_millis(1000)).await;
 
-                                            let result = {
-                                                if let Ok(mut result) =
-                                                    global::RESULT_NET.try_lock()
-                                                {
-                                                    let ret = result.clone();
-                                                    *result = "".to_string();
-                                                    ret
-                                                } else {
-                                                    continue;
-                                                }
-                                            };
-
+                                            let result = net::get_result_net();
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
                                                 info!("NTP cmd completed");
                                                 draw_text(
                                                     disp,
                                                     &format!(
-                                                        "MENU {}/{}\nNTP\n**{}**",
+                                                        "MENU {}/{}\n\nNTP\n**{}**",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                         result.as_str(),
                                                     ),
                                                 )?;
+                                                net::set_result_net("");
                                                 Timer::after(Duration::from_millis(1000)).await;
                                                 {
                                                     let mut in_menu =
@@ -353,7 +343,7 @@ pub async fn menu_loop(
                                     }
                                     MenuOption::ApMode => {
                                         info!("AP MODE selected");
-                                        if !net::send_net_cmd("AP") {
+                                        if !net::set_net_cmd("AP") {
                                             warn!("Failed to send AP cmd");
                                             Timer::after(Duration::from_secs(1)).await;
                                             continue;
@@ -361,7 +351,7 @@ pub async fn menu_loop(
                                         draw_text(
                                             disp,
                                             &format!(
-                                                "MENU {}/{}\n**AP MODE**\n\nconnect\nto\n192.168\n.71.1\nfor\nconfig",
+                                                "MENU {}/{}\n\n**AP MODE**\n\nconnect\nto\n192.168\n.71.1\nfor\nconfig",
                                                 current_menu.index() + 1,
                                                 menu_len,
                                             ),
@@ -371,13 +361,21 @@ pub async fn menu_loop(
                                             // if press button, reboot
                                             if p_sel.is_low().unwrap() {
                                                 info!("reboot");
+                                                draw_text(
+                                                    disp,
+                                                    &format!(
+                                                        "MENU {}/{}\n\nAP MODE\n\n**REBOOTING**",
+                                                        current_menu.index() + 1,
+                                                        menu_len,
+                                                    ),
+                                                )?;
                                                 restart();
                                             }
                                         }
                                     }
                                     MenuOption::Wps => {
                                         info!("WPS selected");
-                                        if !net::send_net_cmd("WPS") {
+                                        if !net::set_net_cmd("WPS") {
                                             warn!("Failed to send WPS cmd");
                                             Timer::after(Duration::from_secs(1)).await;
                                             continue;
@@ -385,7 +383,7 @@ pub async fn menu_loop(
                                         draw_text(
                                             disp,
                                             &format!(
-                                                "MENU {}/{}\n**WPS**\n\nwait\na\nmoment",
+                                                "MENU {}/{}\n\n**WPS**\n\nwait\na\nmoment",
                                                 current_menu.index() + 1,
                                                 menu_len,
                                             ),
@@ -393,29 +391,19 @@ pub async fn menu_loop(
                                         loop {
                                             Timer::after(Duration::from_millis(1000)).await;
 
-                                            let result = {
-                                                if let Ok(mut result) =
-                                                    global::RESULT_NET.try_lock()
-                                                {
-                                                    let ret = result.clone();
-                                                    *result = "".to_string();
-                                                    ret
-                                                } else {
-                                                    continue;
-                                                }
-                                            };
-
+                                            let result = net::get_result_net();
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
                                                 info!("WPS cmd completed");
                                                 draw_text(
                                                     disp,
                                                     &format!(
-                                                        "MENU {}/{}\nWPS\n**{}**",
+                                                        "MENU {}/{}\n\nWPS\n**{}**",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                         result.as_str(),
                                                     ),
                                                 )?;
+                                                net::set_result_net("");
                                                 Timer::after(Duration::from_millis(1000)).await;
                                                 {
                                                     let mut in_menu =
@@ -428,7 +416,7 @@ pub async fn menu_loop(
                                     }
                                     MenuOption::Ota => {
                                         info!("OTA selected");
-                                        if !net::send_net_cmd("OTA") {
+                                        if !net::set_net_cmd("OTA") {
                                             warn!("Failed to send OTA cmd");
                                             Timer::after(Duration::from_secs(1)).await;
                                             continue;
@@ -436,37 +424,28 @@ pub async fn menu_loop(
                                         draw_text(
                                             disp,
                                             &format!(
-                                                "MENU {}/{}\n**OTA**\n\nwait\na\nmoment",
+                                                "MENU {}/{}\n\n**OTA**\n\nwait\na\nmoment",
                                                 current_menu.index() + 1,
                                                 menu_len,
                                             ),
                                         )?;
                                         loop {
-                                            Timer::after(Duration::from_millis(1000)).await;
+                                            Timer::after(Duration::from_millis(10)).await;
 
-                                            let result = {
-                                                if let Ok(mut result) =
-                                                    global::RESULT_NET.try_lock()
-                                                {
-                                                    let ret = result.clone();
-                                                    *result = "".to_string();
-                                                    ret
-                                                } else {
-                                                    continue;
-                                                }
-                                            };
+                                            let result = net::get_result_net();
 
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
                                                 info!("OTA cmd completed");
                                                 draw_text(
                                                     disp,
                                                     &format!(
-                                                        "MENU {}/{}\nOTA\n**{}**",
+                                                        "MENU {}/{}\n\nOTA\n**{}**",
                                                         current_menu.index() + 1,
                                                         menu_len,
                                                         result.as_str(),
                                                     ),
                                                 )?;
+                                                net::set_result_net("");
                                                 Timer::after(Duration::from_millis(1000)).await;
                                                 {
                                                     let mut in_menu =
@@ -474,6 +453,16 @@ pub async fn menu_loop(
                                                     *in_menu = false;
                                                 }
                                                 break;
+                                            } else if result.as_str() != "" {
+                                                draw_text(
+                                                    disp,
+                                                    &format!(
+                                                        "MENU {}/{}\n\nOTA\n\nFLASHING\n\n{}",
+                                                        current_menu.index() + 1,
+                                                        menu_len,
+                                                        result.as_str(),
+                                                    ),
+                                                )?;
                                             }
                                         }
                                     }

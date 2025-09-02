@@ -32,7 +32,7 @@ pub async fn net_loop(
     let _wdt_registered = global::register_task_with_wdt("net_loop");
 
     info!("Triggering initial time sync...");
-    if !send_net_cmd("NTP") {
+    if !set_net_cmd("NTP") {
         warn!("Failed to send NTP cmd");
     }
 
@@ -70,39 +70,38 @@ pub async fn net_loop(
             match cmd_net.as_str() {
                 "AP" => {
                     info!("Received AP command");
+                    set_result_net("");
                     match connect_ap(wifi).await {
                         Ok(_) => {
                             info!("AP cmd completed");
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "OK".to_string();
+                            set_result_net("OK");
                             ap_mode = true;
                         }
                         Err(e) => {
                             warn!("Failed to connect to wifi with ap: {e:?}");
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "NG".to_string();
+                            set_result_net("NG");
                         }
                     }
                     clear_net_cmd();
                 }
                 "WPS" => {
                     info!("Received WPS command");
+                    set_result_net("");
                     match connect_wps(wifi).await {
                         Ok(_) => {
                             info!("WPS cmd completed");
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "OK".to_string();
+                            set_result_net("OK");
                         }
                         Err(e) => {
                             warn!("Failed to connect to wifi with wps: {e:?}");
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "NG".to_string();
+                            set_result_net("NG");
                         }
                     }
                     clear_net_cmd();
                 }
                 "NTP" => {
                     info!("Received NTP command");
+                    set_result_net("");
                     match send_report(wifi).await {
                         Ok(_) => {
                             info!("Report sent");
@@ -115,29 +114,26 @@ pub async fn net_loop(
                     match sync_time_with_wifi(wifi).await {
                         Ok(_) => {
                             info!("NTP cmd completed");
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "OK".to_string();
+                            set_result_net("OK");
                         }
                         Err(e) => {
                             warn!("Failed to sync time: {e:?}");
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "NG".to_string();
+                            set_result_net("NG");
                         }
                     }
                     clear_net_cmd();
                 }
                 "OTA" => {
                     info!("Received OTA command");
+                    set_result_net("");
                     match ota_update_with_wifi(wifi).await {
                         Ok(_) => {
                             info!("OTA cmd completed");
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "OK".to_string();
+                            set_result_net("OK");
                         }
                         Err(e) => {
                             warn!("Failed to update: {e:?}");
-                            let mut result = global::RESULT_NET.lock().unwrap();
-                            *result = "NG".to_string();
+                            set_result_net("NG");
                         }
                     }
                     clear_net_cmd();
@@ -530,7 +526,7 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
     }
 }
 
-pub fn send_net_cmd(cmd: &str) -> bool {
+pub fn set_net_cmd(cmd: &str) -> bool {
     match global::CMD_NET.try_lock() {
         Ok(mut cmd_net) => {
             if cmd_net.as_str() != "" {
@@ -540,7 +536,10 @@ pub fn send_net_cmd(cmd: &str) -> bool {
             *cmd_net = cmd.to_string();
             true
         }
-        Err(_) => false,
+        Err(_) => {
+            warn!("Failed to set CMD_NET");
+            false
+        }
     }
 }
 
@@ -550,6 +549,32 @@ fn clear_net_cmd() -> bool {
             *cmd_net = "".to_string();
             true
         }
-        Err(_) => false,
+        Err(_) => {
+            warn!("Failed to clear CMD_NET");
+            false
+        }
+    }
+}
+
+pub fn set_result_net(result: &str) -> bool {
+    match global::RESULT_NET.try_lock() {
+        Ok(mut result_net) => {
+            *result_net = result.to_string();
+            true
+        }
+        Err(_) => {
+            warn!("Failed to set RESULT_NET");
+            false
+        }
+    }
+}
+
+pub fn get_result_net() -> String {
+    match global::RESULT_NET.try_lock() {
+        Ok(result_net) => result_net.clone(),
+        Err(_) => {
+            warn!("Failed to get RESULT_NET");
+            "".to_string()
+        }
     }
 }
