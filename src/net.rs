@@ -31,12 +31,9 @@ pub async fn net_loop(
     // Register with Task Watchdog Timer
     let _wdt_registered = global::register_task_with_wdt("net_loop");
 
-    info!("initial time sync...");
-    match sync_time_with_wifi(wifi).await {
-        Ok(_) => (),
-        Err(e) => {
-            warn!("Failed to sync time: {e:?}");
-        }
+    info!("Triggering initial time sync...");
+    if !send_net_cmd("NTP") {
+        warn!("Failed to send NTP cmd");
     }
 
     let mut ap_mode = false;
@@ -106,7 +103,14 @@ pub async fn net_loop(
                 }
                 "NTP" => {
                     info!("Received NTP command");
-                    send_report(wifi).await?;
+                    match send_report(wifi).await {
+                        Ok(_) => {
+                            info!("Report sent");
+                        }
+                        Err(e) => {
+                            warn!("Failed to send report: {e:?}");
+                        }
+                    }
 
                     match sync_time_with_wifi(wifi).await {
                         Ok(_) => {
@@ -262,10 +266,10 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     Timer::after(Duration::from_millis(500)).await;
     info!("Additional network stability delay completed");
 
+    send_report_without_wifi().await?;
+
     sync_time().await;
     info!("Time synced");
-
-    send_report_without_wifi().await?;
 
     wifi.stop().await?;
     info!("Wifi stopped");

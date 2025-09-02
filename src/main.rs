@@ -127,16 +127,6 @@ fn main() -> anyhow::Result<()> {
         Ok::<(), anyhow::Error>(())
     })?;
 
-    // task::block_on(async {
-    //     info!("initial time sync...");
-    //     match net::sync_time_with_wifi(&mut wifi).await {
-    //         Ok(_) => (),
-    //         Err(e) => {
-    //             warn!("Failed to sync time: {:?}", e);
-    //         }
-    //     }
-    // });
-
     let net_task = net::net_loop(&mut wifi);
     let show_time_task = show_time_loop(&mut sleds);
     let menu_task = menu::menu_loop(&mut disp, menu_sel);
@@ -191,8 +181,8 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             global::reset_task_watchdog();
         }
 
-        // TBD : 2 hours -> 2 days
-        if duration.as_secs() > 60 * 60 * 2 {
+        // TBD : 1 day -> 5 days
+        if duration.as_secs() > 60 * 60 * 24 * 1 {
             last_sync_time = now;
             info!("Syncing time...");
             if !net::send_net_cmd("NTP") {
