@@ -77,10 +77,20 @@ pub fn get_hw_revision() -> i32 {
 }
 
 /// Reset the task watchdog timer to prevent timeouts
+/// Only call this from tasks that are registered with TWDT
 pub fn reset_task_watchdog() {
     #[cfg(target_os = "espidf")]
     unsafe {
-        esp_idf_svc::sys::esp_task_wdt_reset();
+        // Only reset if current task is registered with TWDT
+        let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
+        if !task_handle.is_null() {
+            // Try to reset, but don't panic on error
+            let result = esp_idf_svc::sys::esp_task_wdt_reset();
+            if result != 0 {
+                // Task not found or not registered - this is expected for some
+                // tasks Don't log as error to avoid spam
+            }
+        }
     }
 }
 
@@ -93,4 +103,70 @@ pub fn yield_to_other_tasks() {
 
     #[cfg(not(target_os = "espidf"))]
     std::thread::sleep(std::time::Duration::from_micros(100));
+}
+
+/// Safely register current task with Task Watchdog Timer
+pub fn register_task_with_wdt(task_name: &str) -> bool {
+    #[cfg(target_os = "espidf")]
+    unsafe {
+        let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
+        if task_handle.is_null() {
+            log::warn!(
+                "{}: Failed to get task handle for WDT registration",
+                task_name
+            );
+            return false;
+        }
+
+        let result = esp_idf_svc::sys::esp_task_wdt_add(task_handle);
+        if result == 0 {
+            log::info!("{}: Registered with TWDT", task_name);
+            true
+        } else {
+            log::warn!(
+                "{}: Failed to register with TWDT (error: {})",
+                task_name,
+                result
+            );
+            false
+        }
+    }
+
+    #[cfg(not(target_os = "espidf"))]
+    {
+        log::info!("{}: WDT registration skipped (not ESP-IDF)", task_name);
+        true
+    }
+}
+
+/// Safely unregister current task from Task Watchdog Timer
+#[allow(dead_code)]
+pub fn unregister_task_from_wdt(task_name: &str) {
+    #[cfg(target_os = "espidf")]
+    unsafe {
+        let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
+        if task_handle.is_null() {
+            log::warn!(
+                "{}: Failed to get task handle for WDT unregistration",
+                task_name
+            );
+            return;
+        }
+
+        let result = esp_idf_svc::sys::esp_task_wdt_delete(task_handle);
+        if result == 0 {
+            log::info!("{}: Unregistered from TWDT", task_name);
+        } else {
+            log::warn!(
+                "{}: Failed to unregister from TWDT (error: {})",
+                task_name,
+                result
+            );
+        }
+    }
+
+    #[cfg(not(target_os = "espidf"))]
+    {
+        log::info!("{}: WDT unregistration skipped (not ESP-IDF)", task_name);
+    }
 }

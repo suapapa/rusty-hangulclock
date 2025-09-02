@@ -26,6 +26,11 @@ pub async fn net_loop(
     // mut debug_led: impl embedded_hal::digital::OutputPin,
 ) -> anyhow::Result<()> {
     // debug_led.set_high().unwrap();
+    info!("Starting net_loop()...");
+
+    // Register with Task Watchdog Timer
+    let _wdt_registered = global::register_task_with_wdt("net_loop");
+
     info!("initial time sync...");
     match sync_time_with_wifi(wifi).await {
         Ok(_) => (),
@@ -47,6 +52,12 @@ pub async fn net_loop(
         if watchdog_counter >= WATCHDOG_INTERVAL {
             info!("Net loop watchdog reset");
             watchdog_counter = 0;
+        }
+
+        // Yield to other tasks periodically and reset watchdog
+        if watchdog_counter % 100 == 0 {
+            Timer::after(Duration::from_millis(1)).await;
+            global::reset_task_watchdog();
         }
 
         if ap_mode {
@@ -75,6 +86,7 @@ pub async fn net_loop(
                             *result = "NG".to_string();
                         }
                     }
+                    clear_net_cmd();
                 }
                 "WPS" => {
                     info!("Received WPS command");
@@ -90,6 +102,7 @@ pub async fn net_loop(
                             *result = "NG".to_string();
                         }
                     }
+                    clear_net_cmd();
                 }
                 "NTP" => {
                     info!("Received NTP command");
@@ -107,6 +120,7 @@ pub async fn net_loop(
                             *result = "NG".to_string();
                         }
                     }
+                    clear_net_cmd();
                 }
                 "OTA" => {
                     info!("Received OTA command");
@@ -122,6 +136,7 @@ pub async fn net_loop(
                             *result = "NG".to_string();
                         }
                     }
+                    clear_net_cmd();
                 }
                 "" => {
                     debug!("Received empty command");
@@ -130,10 +145,6 @@ pub async fn net_loop(
                     warn!("Unknown command: \"{cmd_net}\"");
                 }
             }
-            {
-                let mut cmd_net = global::CMD_NET.lock().unwrap();
-                *cmd_net = "".to_string();
-            };
         }
 
         // debug_led.set_low().unwrap();
@@ -523,6 +534,16 @@ pub fn send_net_cmd(cmd: &str) -> bool {
                 return false;
             }
             *cmd_net = cmd.to_string();
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+fn clear_net_cmd() -> bool {
+    match global::CMD_NET.try_lock() {
+        Ok(mut cmd_net) => {
+            *cmd_net = "".to_string();
             true
         }
         Err(_) => false,

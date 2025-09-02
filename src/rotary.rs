@@ -10,6 +10,9 @@ pub async fn rotary_encoder_loop(
     menu_r2: impl embedded_hal::digital::InputPin,
 ) -> anyhow::Result<()> {
     info!("Starting rotary_encoder_loop()...");
+    
+    // Register with Task Watchdog Timer
+    let _wdt_registered = global::register_task_with_wdt("rotary_encoder_loop");
 
     let mut enc = Rotary::new(menu_r1, menu_r2);
     let mut ticker = Ticker::every(Duration::from_millis(10));
@@ -27,6 +30,12 @@ pub async fn rotary_encoder_loop(
         if watchdog_counter >= WATCHDOG_INTERVAL {
             info!("Rotary encoder loop watchdog reset");
             watchdog_counter = 0;
+        }
+        
+        // Yield to other tasks periodically and reset watchdog
+        if watchdog_counter % 1000 == 0 {
+            Timer::after(Duration::from_millis(1)).await;
+            global::reset_task_watchdog();
         }
 
         {

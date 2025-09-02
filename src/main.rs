@@ -25,6 +25,7 @@ use esp_idf_svc::hal::spi::config::{Config as SpiConfig, DriverConfig as SpiDriv
 use esp_idf_svc::hal::spi::{SpiBusDriver, SpiDriver};
 use esp_idf_svc::hal::task;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
+// use esp_idf_svc::sys::{esp_task_wdt_add, esp_task_wdt_delete, xTaskGetCurrentTaskHandle};
 use esp_idf_svc::timer::EspTaskTimerService;
 use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
 use log::{debug, info, warn};
@@ -162,6 +163,9 @@ fn main() -> anyhow::Result<()> {
 async fn time_sync_loop() -> anyhow::Result<()> {
     info!("Starting time_sync_loop()...");
 
+    // Register with Task Watchdog Timer
+    let _wdt_registered = global::register_task_with_wdt("time_sync_loop");
+
     let mut last_sync_time = time::SystemTime::now();
     let sync_interval = Duration::from_secs(60 * 60); // 1 hour
 
@@ -183,7 +187,7 @@ async fn time_sync_loop() -> anyhow::Result<()> {
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
             Timer::after(Duration::from_millis(1)).await;
-            // Reset watchdog using global helper
+            // Reset watchdog using global helper (only for registered tasks)
             global::reset_task_watchdog();
         }
 
@@ -222,6 +226,8 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             Timer::after(sync_interval).await;
         }
     }
+
+    // Note: TWDT unregistration is handled automatically when task ends
 }
 
 async fn inc_boot_count() -> anyhow::Result<()> {
@@ -235,6 +241,10 @@ where
     SPI: embedded_hal::spi::SpiBus,
 {
     info!("Starting show_time_loop()...");
+
+    // Register with Task Watchdog Timer
+    let _wdt_registered = global::register_task_with_wdt("show_time_loop");
+
     //sleds.turn_on_all();
 
     let mut skip_display: bool; // = false;
@@ -258,7 +268,7 @@ where
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
             Timer::after(Duration::from_millis(1)).await;
-            // Reset watchdog using global helper
+            // Reset watchdog using global helper (only for registered tasks)
             global::reset_task_watchdog();
         }
 
@@ -324,5 +334,7 @@ where
         }
         Timer::after(Duration::from_secs(1)).await;
     }
+
+    // Note: TWDT unregistration is handled automatically when task ends
     // Ok(())
 }

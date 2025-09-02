@@ -82,13 +82,13 @@ impl MenuOption {
 
     fn index(&self) -> usize {
         match self {
-            MenuOption::Ota => 1,
-            MenuOption::LedHue => 2,
-            MenuOption::LedSat => 3,
-            MenuOption::LedVal => 4,
-            MenuOption::UtcOffset => 5,
-            MenuOption::ApMode => 6,
-            MenuOption::Wps => 7,
+            MenuOption::Ota => 0,
+            MenuOption::LedHue => 1,
+            MenuOption::LedSat => 2,
+            MenuOption::LedVal => 3,
+            MenuOption::UtcOffset => 4,
+            MenuOption::ApMode => 5,
+            MenuOption::Wps => 6,
             MenuOption::Ntp => 7,
             MenuOption::Exit => 8,
         }
@@ -99,7 +99,10 @@ pub async fn menu_loop(
     disp: &mut Sh1106GM<I2cInterface<I2cDriver<'_>>>,
     mut p_sel: impl embedded_hal::digital::InputPin + embedded_hal_async::digital::Wait,
 ) -> anyhow::Result<()> {
-    info!("staring menu_loop()...");
+    info!("Starting menu_loop()...");
+
+    // Register with Task Watchdog Timer
+    let _wdt_registered = global::register_task_with_wdt("menu_loop");
 
     let mut current_menu = MenuOption::Wps;
     let menu_options = MenuOption::all();
@@ -108,8 +111,25 @@ pub async fn menu_loop(
     let mut menu_enter_ts: u128 = get_ts();
     let mut sub_menu = false;
 
+    // Watchdog 카운터 추가
+    let mut watchdog_counter = 0;
+    const WATCHDOG_INTERVAL: u32 = 20000; // 50ms * 20000 = 1000초마다 체크
+
     loop {
         Timer::after(Duration::from_millis(50)).await;
+
+        // Watchdog 체크
+        watchdog_counter += 1;
+        if watchdog_counter >= WATCHDOG_INTERVAL {
+            info!("Menu loop watchdog reset");
+            watchdog_counter = 0;
+        }
+
+        // Yield to other tasks periodically and reset watchdog
+        if watchdog_counter % 200 == 0 {
+            Timer::after(Duration::from_millis(1)).await;
+            global::reset_task_watchdog();
+        }
         let in_menu = {
             let in_menu = global::IN_MENU.lock().unwrap();
             *in_menu
