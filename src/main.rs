@@ -39,6 +39,9 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::log::EspLogger::initialize_default();
     info!("Hello, RustyHangulClock!");
 
+    // Register main task with Task Watchdog Timer
+    let _wdt_registered = global::register_task_with_wdt("main_task");
+
     let p = Peripherals::take()?;
 
     let p_oled_sda = p.pins.gpio8;
@@ -135,12 +138,34 @@ fn main() -> anyhow::Result<()> {
 
     info!("Starting tasks...");
     task::block_on(async {
+        // Start a watchdog reset task for the main thread
+        let watchdog_task = async {
+            let mut watchdog_counter = 0;
+            const WATCHDOG_INTERVAL: u32 = 1000; // Reset every 10 seconds (100ms * 1000)
+
+            loop {
+                Timer::after(Duration::from_millis(100)).await;
+                watchdog_counter += 1;
+
+                if watchdog_counter >= WATCHDOG_INTERVAL {
+                    info!("Main task watchdog reset");
+                    global::reset_task_watchdog();
+                    watchdog_counter = 0;
+                }
+            }
+
+            // This will never be reached, but provides the return type
+            #[allow(unreachable_code)]
+            Ok::<(), anyhow::Error>(())
+        };
+
         match futures::try_join!(
             menu_task,
             net_task,
             time_sync_task,
             show_time_task,
             rotary_encoder_task,
+            watchdog_task,
         ) {
             Ok(_) => info!("All tasks completed"),
             Err(e) => info!("Error in task: {e:?}"),
@@ -161,9 +186,25 @@ async fn time_sync_loop() -> anyhow::Result<()> {
 
     // Watchdog 카운터 추가
     let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 3600; // 1시간마다 체크
+    const WATCHDOG_INTERVAL: u32 = 60; // 60초마다 체크 (1초 * 60)
 
     loop {
+        Timer::after(sync_interval).await;
+        match net::get_net_cmd() {
+            Ok(cmd) => {
+                if cmd != "" {
+                    debug!("skip time sync loop due to net cmd: {cmd}");
+                    Timer::after(Duration::from_millis(50)).await;
+                    continue;
+                }
+            }
+            Err(e) => {
+                warn!("Failed to get net cmd: {e}");
+                Timer::after(Duration::from_millis(50)).await;
+                continue;
+            }
+        }
+
         let now = time::SystemTime::now();
         let duration = now.duration_since(last_sync_time).unwrap();
 
@@ -172,17 +213,17 @@ async fn time_sync_loop() -> anyhow::Result<()> {
         if watchdog_counter >= WATCHDOG_INTERVAL {
             info!("Time sync loop watchdog reset");
             watchdog_counter = 0;
+            // Reset watchdog using global helper (only for registered tasks)
+            global::reset_task_watchdog();
         }
 
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
             Timer::after(Duration::from_millis(1)).await;
-            // Reset watchdog using global helper (only for registered tasks)
-            global::reset_task_watchdog();
         }
 
-        // TBD : 1 day -> 5 days
-        if duration.as_secs() > 60 * 60 * 24 * 1 {
+        // Sync time every 5 days
+        if duration.as_secs() > 60 * 60 * 24 * 5 {
             last_sync_time = now;
             info!("Syncing time...");
             if !net::set_net_cmd("NTP") {
@@ -191,30 +232,26 @@ async fn time_sync_loop() -> anyhow::Result<()> {
                 continue;
             }
 
-            // NTP 동기화 루프에 타임아웃 추가
-            let mut timeout_count = 0;
-            const MAX_TIMEOUT: u8 = 30; // 30초 타임아웃
+            // // NTP 동기화 루프에 타임아웃 추가
+            // let mut timeout_count = 0;
+            // const MAX_TIMEOUT: u8 = 30; // 30초 타임아웃
 
-            loop {
-                Timer::after(Duration::from_secs(1)).await;
-                timeout_count += 1;
+            // loop {
+            //     Timer::after(Duration::from_secs(1)).await;
+            //     timeout_count += 1;
 
-                if timeout_count >= MAX_TIMEOUT {
-                    warn!("NTP sync timeout, breaking loop");
-                    break;
-                }
+            //     if timeout_count >= MAX_TIMEOUT {
+            //         warn!("NTP sync timeout, breaking loop");
+            //         break;
+            //     }
 
-                let result = net::get_result_net();
-                if result.as_str() == "OK" || result.as_str() == "NG" {
-                    if result.as_str() == "OK" || result.as_str() == "NG" {
-                        info!("NTP cmd completed: {}", result.as_str());
-                        net::set_result_net("");
-                        break;
-                    }
-                }
-            }
-        } else {
-            Timer::after(sync_interval).await;
+            //     let result = net::get_result_net();
+            //     if result.as_str() == "OK" || result.as_str() == "NG" {
+            //         info!("NTP cmd completed: {}", result.as_str());
+            //         net::set_result_net("");
+            //         break;
+            //     }
+            // }
         }
     }
 
@@ -244,23 +281,38 @@ where
 
     // Watchdog 카운터 추가
     let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 3600; // 1시간마다 체크
+    const WATCHDOG_INTERVAL: u32 = 60; // 60초마다 체크 (1초 * 60)
 
     let utc_offset: i32 = nvs::get_utc_offset()?;
 
     loop {
+        match net::get_net_cmd() {
+            Ok(cmd) => {
+                if cmd != "" {
+                    debug!("skip show time loop due to net cmd: {cmd}");
+                    Timer::after(Duration::from_millis(50)).await;
+                    continue;
+                }
+            }
+            Err(e) => {
+                warn!("Failed to get net cmd: {e}");
+                Timer::after(Duration::from_millis(50)).await;
+                continue;
+            }
+        }
+
         // Watchdog 체크
         watchdog_counter += 1;
         if watchdog_counter >= WATCHDOG_INTERVAL {
             info!("Show time loop watchdog reset");
             watchdog_counter = 0;
+            // Reset watchdog using global helper (only for registered tasks)
+            global::reset_task_watchdog();
         }
 
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
             Timer::after(Duration::from_millis(1)).await;
-            // Reset watchdog using global helper (only for registered tasks)
-            global::reset_task_watchdog();
         }
 
         match global::IN_MENU.try_lock() {

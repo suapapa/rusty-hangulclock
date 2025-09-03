@@ -1,8 +1,8 @@
 use embassy_time::{Duration, Ticker, Timer};
-use log::{info, warn};
+use log::{debug, info, warn};
 use rotary_encoder_hal::{Direction, Rotary};
 
-use crate::global;
+use crate::{global, net};
 // use crate::panel::LED_WRITE_LOCK;
 
 pub async fn rotary_encoder_loop(
@@ -10,7 +10,7 @@ pub async fn rotary_encoder_loop(
     menu_r2: impl embedded_hal::digital::InputPin,
 ) -> anyhow::Result<()> {
     info!("Starting rotary_encoder_loop()...");
-    
+
     // Register with Task Watchdog Timer
     let _wdt_registered = global::register_task_with_wdt("rotary_encoder_loop");
 
@@ -22,20 +22,35 @@ pub async fn rotary_encoder_loop(
 
     // Watchdog 카운터 추가
     let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 10000; // 10ms * 10000 = 100초마다 체크
+    const WATCHDOG_INTERVAL: u32 = 1000; // 10ms * 1000 = 10초마다 체크
 
     loop {
+        match net::get_net_cmd() {
+            Ok(cmd) => {
+                if cmd != "" {
+                    debug!("skip rotary encoder loop due to net cmd: {cmd}");
+                    Timer::after(Duration::from_millis(50)).await;
+                    continue;
+                }
+            }
+            Err(e) => {
+                warn!("Failed to get net cmd: {e}");
+                Timer::after(Duration::from_millis(50)).await;
+                continue;
+            }
+        }
+
         // Watchdog 체크
         watchdog_counter += 1;
         if watchdog_counter >= WATCHDOG_INTERVAL {
             info!("Rotary encoder loop watchdog reset");
             watchdog_counter = 0;
-        }
-        
-        // Yield to other tasks periodically and reset watchdog
-        if watchdog_counter % 1000 == 0 {
-            Timer::after(Duration::from_millis(1)).await;
             global::reset_task_watchdog();
+        }
+
+        // Yield to other tasks periodically
+        if watchdog_counter % 100 == 0 {
+            Timer::after(Duration::from_millis(1)).await;
         }
 
         {

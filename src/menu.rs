@@ -113,7 +113,7 @@ pub async fn menu_loop(
 
     // Watchdog 카운터 추가
     let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 20000; // 50ms * 20000 = 1000초마다 체크
+    const WATCHDOG_INTERVAL: u32 = 200; // 50ms * 200 = 10초마다 체크
 
     loop {
         Timer::after(Duration::from_millis(50)).await;
@@ -123,12 +123,12 @@ pub async fn menu_loop(
         if watchdog_counter >= WATCHDOG_INTERVAL {
             info!("Menu loop watchdog reset");
             watchdog_counter = 0;
+            global::reset_task_watchdog();
         }
 
-        // Yield to other tasks periodically and reset watchdog
-        if watchdog_counter % 200 == 0 {
+        // Yield to other tasks periodically
+        if watchdog_counter % 20 == 0 {
             Timer::after(Duration::from_millis(1)).await;
-            global::reset_task_watchdog();
         }
         let in_menu = {
             let in_menu = global::IN_MENU.lock().unwrap();
@@ -257,6 +257,9 @@ pub async fn menu_loop(
                         MenuOption::UtcOffset => {
                             let offset = *global::UTC_OFFSET.lock().unwrap();
                             nvs::set_utc_offset(offset as i32).unwrap();
+
+                            Timer::after(Duration::from_millis(1000)).await;
+                            esp_idf_svc::hal::reset::restart();
                         }
                         _ => {}
                     }

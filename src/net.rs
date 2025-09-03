@@ -37,38 +37,34 @@ pub async fn net_loop(
     }
 
     let mut ap_mode = false;
+    let mut ota_mode = false;
     // Watchdog 카운터 추가
     let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 10000; // 100ms * 10000 = 1000초마다 체크
+    const WATCHDOG_INTERVAL: u32 = 100; // 100ms * 100 = 10초마다 체크
 
     loop {
         Timer::after(Duration::from_millis(100)).await;
+
+        if ap_mode || ota_mode {
+            continue;
+        }
 
         // Watchdog 체크
         watchdog_counter += 1;
         if watchdog_counter >= WATCHDOG_INTERVAL {
             info!("Net loop watchdog reset");
             watchdog_counter = 0;
-        }
-
-        // Yield to other tasks periodically and reset watchdog
-        if watchdog_counter % 100 == 0 {
-            Timer::after(Duration::from_millis(1)).await;
             global::reset_task_watchdog();
         }
 
-        if ap_mode {
-            continue;
+        // Yield to other tasks periodically
+        if watchdog_counter % 10 == 0 {
+            Timer::after(Duration::from_millis(1)).await;
         }
 
-        {
-            let cmd_net = {
-                let cmd_net = global::CMD_NET.lock().unwrap();
-                cmd_net.clone()
-            };
-
-            match cmd_net.as_str() {
-                "AP" => {
+        match get_net_cmd() {
+            Ok(cmd) => {
+                if cmd == "AP" {
                     info!("Received AP command");
                     set_result_net("");
                     match connect_ap(wifi).await {
@@ -84,7 +80,7 @@ pub async fn net_loop(
                     }
                     clear_net_cmd();
                 }
-                "WPS" => {
+                if cmd == "WPS" {
                     info!("Received WPS command");
                     set_result_net("");
                     match connect_wps(wifi).await {
@@ -99,7 +95,7 @@ pub async fn net_loop(
                     }
                     clear_net_cmd();
                 }
-                "NTP" => {
+                if cmd == "NTP" {
                     info!("Received NTP command");
                     set_result_net("");
                     match send_report(wifi).await {
@@ -123,8 +119,9 @@ pub async fn net_loop(
                     }
                     clear_net_cmd();
                 }
-                "OTA" => {
+                if cmd == "OTA" {
                     info!("Received OTA command");
+                    ota_mode = true;
                     set_result_net("");
                     match ota_update_with_wifi(wifi).await {
                         Ok(_) => {
@@ -138,16 +135,14 @@ pub async fn net_loop(
                     }
                     clear_net_cmd();
                 }
-                "" => {
+                if cmd == "" {
                     debug!("Received empty command");
                 }
-                _ => {
-                    warn!("Unknown command: \"{cmd_net}\"");
-                }
+            }
+            Err(e) => {
+                warn!("Failed to get net cmd: {e}");
             }
         }
-
-        // debug_led.set_low().unwrap();
     }
 }
 
@@ -540,6 +535,13 @@ pub fn set_net_cmd(cmd: &str) -> bool {
             warn!("Failed to set CMD_NET");
             false
         }
+    }
+}
+
+pub fn get_net_cmd() -> Result<String, String> {
+    match global::CMD_NET.try_lock() {
+        Ok(cmd_net) => Ok(cmd_net.clone()),
+        Err(_) => Err("Failed to get CMD_NET".to_string()),
     }
 }
 
