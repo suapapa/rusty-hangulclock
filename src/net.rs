@@ -52,7 +52,7 @@ pub async fn net_loop(
         // Watchdog 체크
         watchdog_counter += 1;
         if watchdog_counter >= WATCHDOG_INTERVAL {
-            info!("Net loop watchdog reset");
+            debug!("Net loop watchdog reset");
             watchdog_counter = 0;
             global::reset_task_watchdog();
         }
@@ -98,25 +98,15 @@ pub async fn net_loop(
                 if cmd == "NTP" {
                     info!("Received NTP command");
                     set_result_net("");
-                    match send_report(wifi).await {
+                    match send_report_and_sync_time(wifi).await {
                         Ok(_) => {
-                            info!("Report sent");
+                            info!("Report sent and time synced");
                         }
                         Err(e) => {
                             warn!("Failed to send report: {e:?}");
                         }
                     }
 
-                    match sync_time_with_wifi(wifi).await {
-                        Ok(_) => {
-                            info!("NTP cmd completed");
-                            set_result_net("OK");
-                        }
-                        Err(e) => {
-                            warn!("Failed to sync time: {e:?}");
-                            set_result_net("NG");
-                        }
-                    }
                     clear_net_cmd();
                 }
                 if cmd == "OTA" {
@@ -258,8 +248,9 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     info!("Additional network stability delay completed");
 
     send_report_without_wifi().await?;
+    info!("Report sent");
 
-    sync_time().await;
+    sync_time_without_wifi().await;
     info!("Time synced");
 
     wifi.stop().await?;
@@ -268,57 +259,7 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     Ok(())
 }
 
-pub async fn sync_time_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<bool> {
-    match nvs::get_wifi_cred() {
-        Ok((ssid, pass)) => {
-            let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
-                ssid: ssid.as_str().try_into().unwrap(),
-                bssid: None,
-                auth_method: AuthMethod::WPA2Personal,
-                password: pass.as_str().try_into().unwrap(),
-                channel: None,
-                ..Default::default()
-            });
-
-            wifi.set_configuration(&wifi_configuration)?;
-        }
-        Err(e) => {
-            warn!("Failed to load wifi cred: {e:?}");
-            return Err(e);
-        }
-    }
-
-    wifi.start().await?;
-    info!("Wifi started");
-
-    unsafe { esp_wifi_set_max_tx_power(34) };
-
-    wifi.connect().await?;
-    info!("Wifi connected");
-
-    wifi.wait_netif_up().await?;
-    info!("Wifi netif up");
-
-    // Add delay to ensure network is fully initialized
-    Timer::after(Duration::from_secs(3)).await; // Increased from 2s to 3s
-    info!("Network initialization delay completed");
-
-    // Additional network stability check
-    Timer::after(Duration::from_millis(500)).await;
-    info!("Additional network stability delay completed");
-
-    let sync_result = sync_time().await;
-    if !sync_result {
-        warn!("Failed to sync time");
-    }
-
-    wifi.stop().await?;
-    info!("Wifi stopped");
-
-    Ok(sync_result)
-}
-
-async fn sync_time() -> bool {
+async fn sync_time_without_wifi() -> bool {
     let sntp_conf = sntp::SntpConf {
         servers: ["time.google.com"], // "pool.ntp.org"
         operating_mode: sntp::OperatingMode::Poll,
@@ -351,7 +292,37 @@ async fn sync_time() -> bool {
     ret
 }
 
-pub async fn send_report(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+async fn send_report_without_wifi() -> anyhow::Result<()> {
+    const MAX_RETRIES: usize = 3;
+    const RETRY_DELAY_MS: u64 = 5000; // 5 seconds between retries
+
+    for attempt in 1..=MAX_RETRIES {
+        info!("Attempting to send report (attempt {attempt}/{MAX_RETRIES})");
+
+        match try_send_report().await {
+            Ok(status) => {
+                info!("Report sent successfully with status: {status}");
+                return Ok(());
+            }
+            Err(e) => {
+                warn!("Attempt {attempt} failed: {e:?}");
+                if attempt < MAX_RETRIES {
+                    info!("Retrying in {} seconds...", RETRY_DELAY_MS / 1000);
+                    Timer::after(Duration::from_millis(RETRY_DELAY_MS)).await;
+                } else {
+                    warn!("All {MAX_RETRIES} attempts failed, giving up");
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    unreachable!()
+}
+
+pub async fn send_report_and_sync_time(
+    wifi: &mut AsyncWifi<EspWifi<'static>>,
+) -> anyhow::Result<()> {
     match nvs::get_wifi_cred() {
         Ok((ssid, pass)) => {
             let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
@@ -391,39 +362,12 @@ pub async fn send_report(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     info!("Additional network stability delay completed");
 
     send_report_without_wifi().await?;
+    sync_time_without_wifi().await;
 
     wifi.stop().await?;
     info!("Wifi stopped");
 
     Ok(())
-}
-
-async fn send_report_without_wifi() -> anyhow::Result<()> {
-    const MAX_RETRIES: usize = 3;
-    const RETRY_DELAY_MS: u64 = 5000; // 5 seconds between retries
-
-    for attempt in 1..=MAX_RETRIES {
-        info!("Attempting to send report (attempt {attempt}/{MAX_RETRIES})");
-
-        match try_send_report().await {
-            Ok(status) => {
-                info!("Report sent successfully with status: {status}");
-                return Ok(());
-            }
-            Err(e) => {
-                warn!("Attempt {attempt} failed: {e:?}");
-                if attempt < MAX_RETRIES {
-                    info!("Retrying in {} seconds...", RETRY_DELAY_MS / 1000);
-                    Timer::after(Duration::from_millis(RETRY_DELAY_MS)).await;
-                } else {
-                    warn!("All {MAX_RETRIES} attempts failed, giving up");
-                    return Err(e);
-                }
-            }
-        }
-    }
-
-    unreachable!()
 }
 
 async fn try_send_report() -> anyhow::Result<u16> {

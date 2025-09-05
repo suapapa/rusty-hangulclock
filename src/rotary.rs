@@ -43,7 +43,7 @@ pub async fn rotary_encoder_loop(
         // Watchdog 체크
         watchdog_counter += 1;
         if watchdog_counter >= WATCHDOG_INTERVAL {
-            info!("Rotary encoder loop watchdog reset");
+            debug!("Rotary encoder loop watchdog reset");
             watchdog_counter = 0;
             global::reset_task_watchdog();
         }

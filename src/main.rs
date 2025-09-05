@@ -148,7 +148,7 @@ fn main() -> anyhow::Result<()> {
                 watchdog_counter += 1;
 
                 if watchdog_counter >= WATCHDOG_INTERVAL {
-                    info!("Main task watchdog reset");
+                    debug!("Main task watchdog reset");
                     global::reset_task_watchdog();
                     watchdog_counter = 0;
                 }
@@ -181,15 +181,24 @@ async fn time_sync_loop() -> anyhow::Result<()> {
     // Register with Task Watchdog Timer
     let _wdt_registered = global::register_task_with_wdt("time_sync_loop");
 
-    let mut last_sync_time = time::SystemTime::now();
-    let sync_interval = Duration::from_secs(60 * 60); // 1 hour
+    let sync_check_interval = Duration::from_secs(60 * 60); // 1 hour
+    let mut sync_check_cnt = 0;
 
     // Watchdog 카운터 추가
     let mut watchdog_counter = 0;
     const WATCHDOG_INTERVAL: u32 = 60; // 60초마다 체크 (1초 * 60)
 
     loop {
-        Timer::after(sync_interval).await;
+        // Watchdog 체크
+        watchdog_counter += 1;
+        if watchdog_counter >= WATCHDOG_INTERVAL {
+            debug!("Time sync loop watchdog reset");
+            watchdog_counter = 0;
+            // Reset watchdog using global helper (only for registered tasks)
+            global::reset_task_watchdog();
+        }
+
+        Timer::after(sync_check_interval).await;
         match net::get_net_cmd() {
             Ok(cmd) => {
                 if cmd != "" {
@@ -205,26 +214,17 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             }
         }
 
-        let now = time::SystemTime::now();
-        let duration = now.duration_since(last_sync_time).unwrap();
-
-        // Watchdog 체크
-        watchdog_counter += 1;
-        if watchdog_counter >= WATCHDOG_INTERVAL {
-            info!("Time sync loop watchdog reset");
-            watchdog_counter = 0;
-            // Reset watchdog using global helper (only for registered tasks)
-            global::reset_task_watchdog();
-        }
-
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
             Timer::after(Duration::from_millis(1)).await;
         }
 
-        // Sync time every 5 days
-        if duration.as_secs() > 60 * 60 * 24 * 5 {
-            last_sync_time = now;
+        sync_check_cnt += 1;
+        if sync_check_cnt >= 24 {
+            sync_check_cnt = 0;
+        }
+
+        if sync_check_cnt == 0 {
             info!("Syncing time...");
             if !net::set_net_cmd("NTP") {
                 warn!("Failed to send NTP cmd");
@@ -254,8 +254,6 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             // }
         }
     }
-
-    // Note: TWDT unregistration is handled automatically when task ends
 }
 
 async fn inc_boot_count() -> anyhow::Result<()> {
@@ -286,6 +284,20 @@ where
     let utc_offset: i32 = nvs::get_utc_offset()?;
 
     loop {
+        // Watchdog 체크
+        watchdog_counter += 1;
+        if watchdog_counter >= WATCHDOG_INTERVAL {
+            debug!("Show time loop watchdog reset");
+            watchdog_counter = 0;
+            // Reset watchdog using global helper (only for registered tasks)
+            global::reset_task_watchdog();
+        }
+
+        // Yield to other tasks periodically
+        if watchdog_counter % 10 == 0 {
+            Timer::after(Duration::from_millis(1)).await;
+        }
+
         match net::get_net_cmd() {
             Ok(cmd) => {
                 if cmd != "" {
@@ -299,20 +311,6 @@ where
                 Timer::after(Duration::from_millis(50)).await;
                 continue;
             }
-        }
-
-        // Watchdog 체크
-        watchdog_counter += 1;
-        if watchdog_counter >= WATCHDOG_INTERVAL {
-            info!("Show time loop watchdog reset");
-            watchdog_counter = 0;
-            // Reset watchdog using global helper (only for registered tasks)
-            global::reset_task_watchdog();
-        }
-
-        // Yield to other tasks periodically
-        if watchdog_counter % 10 == 0 {
-            Timer::after(Duration::from_millis(1)).await;
         }
 
         match global::IN_MENU.try_lock() {

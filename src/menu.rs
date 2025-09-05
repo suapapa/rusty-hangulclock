@@ -3,9 +3,7 @@ use std::time;
 use embassy_time::{Duration, Timer};
 use esp_idf_svc::hal::i2c::*;
 use esp_idf_svc::hal::reset::restart;
-// use esp_idf_svc::hal::task;
-// use crate::panel::LED_WRITE_LOCK;
-use log::{info, warn};
+use log::{debug, info, warn};
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
 
 use crate::{global, net, nvs};
@@ -121,7 +119,7 @@ pub async fn menu_loop(
         // Watchdog 체크
         watchdog_counter += 1;
         if watchdog_counter >= WATCHDOG_INTERVAL {
-            info!("Menu loop watchdog reset");
+            debug!("Menu loop watchdog reset");
             watchdog_counter = 0;
             global::reset_task_watchdog();
         }
@@ -436,7 +434,6 @@ pub async fn menu_loop(
                                             Timer::after(Duration::from_millis(10)).await;
 
                                             let result = net::get_result_net();
-
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
                                                 info!("OTA cmd completed");
                                                 draw_text(
