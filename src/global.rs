@@ -111,23 +111,16 @@ pub fn register_task_with_wdt(task_name: &str) -> bool {
     unsafe {
         let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
         if task_handle.is_null() {
-            log::warn!(
-                "{}: Failed to get task handle for WDT registration",
-                task_name
-            );
+            log::warn!("{task_name}: Failed to get task handle for WDT registration");
             return false;
         }
 
         let result = esp_idf_svc::sys::esp_task_wdt_add(task_handle);
         if result == 0 {
-            log::info!("{}: Registered with TWDT", task_name);
+            log::info!("{task_name}: Registered with TWDT");
             true
         } else {
-            log::warn!(
-                "{}: Failed to register with TWDT (error: {})",
-                task_name,
-                result
-            );
+            log::warn!("{task_name}: Failed to register with TWDT (error: {result})");
             false
         }
     }
@@ -146,22 +139,15 @@ pub fn unregister_task_from_wdt(task_name: &str) {
     unsafe {
         let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
         if task_handle.is_null() {
-            log::warn!(
-                "{}: Failed to get task handle for WDT unregistration",
-                task_name
-            );
+            log::warn!("{task_name}: Failed to get task handle for WDT unregistration");
             return;
         }
 
         let result = esp_idf_svc::sys::esp_task_wdt_delete(task_handle);
         if result == 0 {
-            log::info!("{}: Unregistered from TWDT", task_name);
+            log::info!("{task_name}: Unregistered from TWDT");
         } else {
-            log::warn!(
-                "{}: Failed to unregister from TWDT (error: {})",
-                task_name,
-                result
-            );
+            log::warn!("{task_name}: Failed to unregister from TWDT (error: {result})");
         }
     }
 

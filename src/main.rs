@@ -172,7 +172,9 @@ fn main() -> anyhow::Result<()> {
         }
     });
 
-    Ok(())
+    info!("Restarting...");
+    esp_idf_svc::hal::reset::restart();
+    // Ok(())
 }
 
 async fn time_sync_loop() -> anyhow::Result<()> {
@@ -201,7 +203,7 @@ async fn time_sync_loop() -> anyhow::Result<()> {
         Timer::after(sync_check_interval).await;
         match net::get_net_cmd() {
             Ok(cmd) => {
-                if cmd != "" {
+                if !cmd.is_empty() {
                     debug!("skip time sync loop due to net cmd: {cmd}");
                     Timer::after(Duration::from_millis(50)).await;
                     continue;
@@ -300,7 +302,7 @@ where
 
         match net::get_net_cmd() {
             Ok(cmd) => {
-                if cmd != "" {
+                if !cmd.is_empty() {
                     debug!("skip show time loop due to net cmd: {cmd}");
                     Timer::after(Duration::from_millis(50)).await;
                     continue;

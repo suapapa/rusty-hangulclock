@@ -27,7 +27,7 @@ pub async fn rotary_encoder_loop(
     loop {
         match net::get_net_cmd() {
             Ok(cmd) => {
-                if cmd != "" {
+                if !cmd.is_empty() {
                     debug!("skip rotary encoder loop due to net cmd: {cmd}");
                     Timer::after(Duration::from_millis(50)).await;
                     continue;

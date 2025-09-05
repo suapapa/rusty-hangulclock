@@ -98,7 +98,7 @@ pub async fn net_loop(
                 if cmd == "NTP" {
                     info!("Received NTP command");
                     set_result_net("");
-                    match send_report_and_sync_time(wifi).await {
+                    match sync_time_and_send_report(wifi).await {
                         Ok(_) => {
                             info!("Report sent and time synced");
                         }
@@ -125,7 +125,7 @@ pub async fn net_loop(
                     }
                     clear_net_cmd();
                 }
-                if cmd == "" {
+                if cmd.is_empty() {
                     debug!("Received empty command");
                 }
             }
@@ -247,11 +247,22 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     Timer::after(Duration::from_millis(500)).await;
     info!("Additional network stability delay completed");
 
-    send_report_without_wifi().await?;
-    info!("Report sent");
-
-    sync_time_without_wifi().await;
-    info!("Time synced");
+    match sync_time_without_wifi().await {
+        Ok(_) => {
+            info!("Time synced");
+        }
+        Err(e) => {
+            warn!("Failed to sync time: {e:?}");
+        }
+    }
+    match send_report_without_wifi().await {
+        Ok(_) => {
+            info!("Report sent");
+        }
+        Err(e) => {
+            warn!("Failed to send report: {e:?}");
+        }
+    }
 
     wifi.stop().await?;
     info!("Wifi stopped");
@@ -259,7 +270,7 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     Ok(())
 }
 
-async fn sync_time_without_wifi() -> bool {
+async fn sync_time_without_wifi() -> anyhow::Result<bool> {
     let sntp_conf = sntp::SntpConf {
         servers: ["time.google.com"], // "pool.ntp.org"
         operating_mode: sntp::OperatingMode::Poll,
@@ -267,29 +278,24 @@ async fn sync_time_without_wifi() -> bool {
     };
 
     let sntp = sntp::EspSntp::new(&sntp_conf).expect("Failed to create SNTP");
-    let mut ret = false;
     let mut retry = 10;
     loop {
         if retry == 0 {
-            break;
+            return Err(anyhow::anyhow!("Failed to sync time"));
         }
         if sntp.get_sync_status() == sntp::SyncStatus::Completed {
             info!("SNTP synced");
-            ret = true;
-            break;
+            {
+                info!("Setting time_synced");
+                let mut time_synced = global::TIME_SYNCED.lock().unwrap();
+                *time_synced = true;
+            }
+            return Ok(true);
         }
         info!("Waiting for SNTP sync...");
         Timer::after(Duration::from_secs(3)).await;
         retry -= 1;
     }
-
-    {
-        info!("Setting time_synced");
-        let mut time_synced = global::TIME_SYNCED.lock().unwrap();
-        *time_synced = ret;
-    }
-
-    ret
 }
 
 async fn send_report_without_wifi() -> anyhow::Result<()> {
@@ -320,7 +326,7 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
     unreachable!()
 }
 
-pub async fn send_report_and_sync_time(
+pub async fn sync_time_and_send_report(
     wifi: &mut AsyncWifi<EspWifi<'static>>,
 ) -> anyhow::Result<()> {
     match nvs::get_wifi_cred() {
@@ -361,8 +367,22 @@ pub async fn send_report_and_sync_time(
     Timer::after(Duration::from_millis(500)).await;
     info!("Additional network stability delay completed");
 
-    send_report_without_wifi().await?;
-    sync_time_without_wifi().await;
+    match sync_time_without_wifi().await {
+        Ok(_) => {
+            info!("Time synced");
+        }
+        Err(e) => {
+            warn!("Failed to sync time: {e:?}");
+        }
+    }
+    match send_report_without_wifi().await {
+        Ok(_) => {
+            info!("Report sent");
+        }
+        Err(e) => {
+            warn!("Failed to send report: {e:?}");
+        }
+    }
 
     wifi.stop().await?;
     info!("Wifi stopped");
