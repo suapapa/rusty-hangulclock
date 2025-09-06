@@ -75,7 +75,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
             if flashing_idx % 10 == 0 {
                 net::set_result_net(spinner[spinner_index]);
                 spinner_index = (spinner_index + 1) % spinner.len();
-                Timer::after(Duration::from_millis(100)).await;
+                Timer::after(Duration::from_millis(10)).await;
             }
             update.write(&buf[..n]).expect("write OTA data");
         }

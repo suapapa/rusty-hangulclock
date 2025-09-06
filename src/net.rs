@@ -271,6 +271,11 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
 }
 
 async fn sync_time_without_wifi() -> anyhow::Result<bool> {
+    let last_time_synced = {
+        let last_time_synced = global::TIME_SYNCED.lock().unwrap();
+        *last_time_synced
+    };
+
     let sntp_conf = sntp::SntpConf {
         servers: ["time.google.com"], // "pool.ntp.org"
         operating_mode: sntp::OperatingMode::Poll,
@@ -278,22 +283,22 @@ async fn sync_time_without_wifi() -> anyhow::Result<bool> {
     };
 
     let sntp = sntp::EspSntp::new(&sntp_conf).expect("Failed to create SNTP");
-    let mut retry = 10;
+    let mut retry = 5;
     loop {
         if retry == 0 {
             return Err(anyhow::anyhow!("Failed to sync time"));
         }
         if sntp.get_sync_status() == sntp::SyncStatus::Completed {
             info!("SNTP synced");
-            {
-                info!("Setting time_synced");
+            if !last_time_synced {
+                info!("Setting initial time_synced");
                 let mut time_synced = global::TIME_SYNCED.lock().unwrap();
                 *time_synced = true;
             }
             return Ok(true);
         }
         info!("Waiting for SNTP sync...");
-        Timer::after(Duration::from_secs(3)).await;
+        Timer::after(Duration::from_secs(5)).await;
         retry -= 1;
     }
 }
