@@ -1,13 +1,12 @@
 use std::time::Duration as StdDuration;
 
-use embassy_time::{Duration, Timer};
 use embedded_svc::http::client::Client;
 use embedded_svc::http::Method;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::ota::EspOta;
 use log::{debug, info};
 
-use crate::{global, net};
+use crate::{global, net, timer};
 
 pub async fn ota_update() -> anyhow::Result<()> {
     let ping_url = "https://hangulclock.homin.dev/v1/ping";
@@ -31,7 +30,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
         }
         if attempt < 10 {
             info!("Ping failed, retrying in 10 seconds...");
-            Timer::after(Duration::from_secs(10)).await;
+            timer::sleep_secs(10).await;
         }
     }
     if !ping_success {
@@ -55,7 +54,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
     let request = client.request(Method::Get, url.as_ref(), &[])?;
     info!("HTTP request created, now submitting (connection phase)...");
     let mut response = request.submit()?;
-    Timer::after(Duration::from_millis(10)).await;
+    timer::sleep_millis(10).await;
 
     info!("Response code: {}", response.status());
     if response.status() == 200 {
@@ -66,18 +65,19 @@ pub async fn ota_update() -> anyhow::Result<()> {
         let mut flashing_idx = 0;
         let spinner = ["-", "\\", "|", "/"];
         let mut spinner_index = 0;
+        global::yield_to_other_tasks().await;
         while let Ok(n) = response.read(&mut buf[..]) {
             if n == 0 {
                 break;
             }
             debug!("Writing OTA data: {n}");
+            update.write(&buf[..n]).expect("write OTA data");
             flashing_idx += 1;
             if flashing_idx % 10 == 0 {
                 net::set_result_net(spinner[spinner_index]);
                 spinner_index = (spinner_index + 1) % spinner.len();
-                Timer::after(Duration::from_millis(10)).await;
+                global::yield_to_other_tasks().await;
             }
-            update.write(&buf[..n]).expect("write OTA data");
         }
         update.complete().expect("complete OTA");
         info!("Update complete, rebooting...");

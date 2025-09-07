@@ -1,6 +1,5 @@
 use std::time::Duration as StdDuration;
 
-use embassy_time::{Duration, Timer};
 use embedded_svc::http::client::Client;
 use embedded_svc::http::Method;
 use embedded_svc::wifi::{
@@ -12,7 +11,7 @@ use esp_idf_svc::sntp;
 use esp_idf_svc::wifi::{AsyncWifi, EspWifi, WpsConfig, WpsFactoryInfo, WpsStatus, WpsType};
 use log::{debug, info, warn};
 
-use crate::{global, nvs, ota_update, report, web_server};
+use crate::{global, nvs, ota_update, report, timer, web_server};
 
 pub const fn get_api_token() -> &'static str {
     match option_env!("RUSTY_HANGULCLOCK_TOKEN") {
@@ -43,7 +42,7 @@ pub async fn net_loop(
     const WATCHDOG_INTERVAL: u32 = 100; // 100ms * 100 = 10초마다 체크
 
     loop {
-        Timer::after(Duration::from_millis(100)).await;
+        timer::sleep_millis(100).await;
 
         if ap_mode || ota_mode {
             continue;
@@ -59,7 +58,7 @@ pub async fn net_loop(
 
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
-            Timer::after(Duration::from_millis(1)).await;
+            global::yield_to_other_tasks().await;
         }
 
         match get_net_cmd() {
@@ -101,9 +100,11 @@ pub async fn net_loop(
                     match sync_time_and_send_report(wifi).await {
                         Ok(_) => {
                             info!("Report sent and time synced");
+                            set_result_net("OK");
                         }
                         Err(e) => {
                             warn!("Failed to send report: {e:?}");
+                            set_result_net("NG");
                         }
                     }
 
@@ -240,11 +241,11 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     info!("Wifi netif up");
 
     // Add delay to ensure network is fully initialized
-    Timer::after(Duration::from_secs(3)).await; // Increased from 2s to 3s
+    timer::sleep_secs(3).await; // Increased from 2s to 3s
     info!("Network initialization delay completed");
 
     // Additional network stability check
-    Timer::after(Duration::from_millis(500)).await;
+    timer::sleep_millis(500).await;
     info!("Additional network stability delay completed");
 
     match sync_time_without_wifi().await {
@@ -288,6 +289,7 @@ async fn sync_time_without_wifi() -> anyhow::Result<bool> {
         if retry == 0 {
             return Err(anyhow::anyhow!("Failed to sync time"));
         }
+        // global::yield_to_other_tasks().await;
         if sntp.get_sync_status() == sntp::SyncStatus::Completed {
             info!("SNTP synced");
             if !last_time_synced {
@@ -298,7 +300,7 @@ async fn sync_time_without_wifi() -> anyhow::Result<bool> {
             return Ok(true);
         }
         info!("Waiting for SNTP sync...");
-        Timer::after(Duration::from_secs(5)).await;
+        timer::sleep_secs(5).await;
         retry -= 1;
     }
 }
@@ -319,7 +321,7 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
                 warn!("Attempt {attempt} failed: {e:?}");
                 if attempt < MAX_RETRIES {
                     info!("Retrying in {} seconds...", RETRY_DELAY_MS / 1000);
-                    Timer::after(Duration::from_millis(RETRY_DELAY_MS)).await;
+                    timer::sleep_millis(RETRY_DELAY_MS).await;
                 } else {
                     warn!("All {MAX_RETRIES} attempts failed, giving up");
                     return Err(e);
@@ -365,11 +367,11 @@ pub async fn sync_time_and_send_report(
     info!("Wifi netif up");
 
     // Add delay to ensure network is fully initialized
-    Timer::after(Duration::from_secs(3)).await; // Increased from 2s to 3s
+    timer::sleep_secs(3).await; // Increased from 2s to 3s
     info!("Network initialization delay completed");
 
     // Additional network stability check
-    Timer::after(Duration::from_millis(500)).await;
+    timer::sleep_millis(500).await;
     info!("Additional network stability delay completed");
 
     match sync_time_without_wifi().await {
@@ -466,11 +468,11 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
     info!("Wifi netif up");
 
     // Add delay to ensure network is fully initialized
-    Timer::after(Duration::from_secs(3)).await; // Increased from 2s to 3s
+    timer::sleep_secs(3).await; // Increased from 2s to 3s
     info!("Network initialization delay completed");
 
     // Additional network stability check
-    Timer::after(Duration::from_millis(500)).await;
+    timer::sleep_millis(500).await;
     info!("Additional network stability delay completed");
 
     let ota_result = ota_update::ota_update().await;

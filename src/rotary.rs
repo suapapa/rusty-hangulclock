@@ -1,8 +1,8 @@
-use embassy_time::{Duration, Ticker, Timer};
+// use embassy_time::{Duration, Ticker, Timer};
 use log::{debug, info, warn};
 use rotary_encoder_hal::{Direction, Rotary};
 
-use crate::{global, net};
+use crate::{global, net, timer};
 // use crate::panel::LED_WRITE_LOCK;
 
 pub async fn rotary_encoder_loop(
@@ -15,7 +15,7 @@ pub async fn rotary_encoder_loop(
     let _wdt_registered = global::register_task_with_wdt("rotary_encoder_loop");
 
     let mut enc = Rotary::new(menu_r1, menu_r2);
-    let mut ticker = Ticker::every(Duration::from_millis(10));
+    // let mut ticker = Ticker::every(Duration::from_millis(10));
     let mut last_direction = Direction::None;
     let mut debounce_count = 0;
     const DEBOUNCE_THRESHOLD: u8 = 3; // Reduced threshold
@@ -29,13 +29,13 @@ pub async fn rotary_encoder_loop(
             Ok(cmd) => {
                 if !cmd.is_empty() {
                     debug!("skip rotary encoder loop due to net cmd: {cmd}");
-                    Timer::after(Duration::from_millis(50)).await;
+                    timer::sleep_millis(50).await;
                     continue;
                 }
             }
             Err(e) => {
                 warn!("Failed to get net cmd: {e}");
-                Timer::after(Duration::from_millis(50)).await;
+                timer::sleep_millis(50).await;
                 continue;
             }
         }
@@ -50,7 +50,7 @@ pub async fn rotary_encoder_loop(
 
         // Yield to other tasks periodically
         if watchdog_counter % 100 == 0 {
-            Timer::after(Duration::from_millis(1)).await;
+            global::yield_to_other_tasks().await;
         }
 
         {
@@ -104,10 +104,11 @@ pub async fn rotary_encoder_loop(
                 Err(e) => {
                     warn!("Failed to update rotary encoder: {e:?}");
                     // 에러 발생 시 짧은 대기
-                    Timer::after(Duration::from_millis(50)).await;
+                    timer::sleep_millis(50).await;
                 }
             }
         }
-        ticker.next().await;
+        timer::sleep_millis(10).await;
+        // ticker.next().await;
     }
 }

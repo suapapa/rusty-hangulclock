@@ -5,13 +5,14 @@ use apa102_spi::Apa102;
 use embedded_hal::spi::SpiBus;
 // use once_cell::sync::Lazy;
 use esp_idf_svc::hal::interrupt;
+use esp_idf_svc::hal::task;
 use log::info;
 use smart_leds::hsv::{hsv2rgb, Hsv};
 use smart_leds::{gamma, SmartLedsWrite, RGB8};
 #[cfg(feature = "neopixel")]
 use ws2812_spi::Ws2812;
 
-use crate::{global, nvs};
+use crate::{global, nvs, timer};
 
 const LED_NUM: usize = 25;
 // const DEFAULT_BRIGHTNESS: u8 = 100;
@@ -60,7 +61,9 @@ impl<SPI: SpiBus> Sleds<SPI> {
                 .unwrap()
                 .write(gamma(data.iter().cloned()))
                 .unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            task::block_on(async {
+                timer::sleep_millis(50).await;
+            });
         }
 
         let mut data = [RGB8::default(); LED_NUM];
@@ -78,7 +81,9 @@ impl<SPI: SpiBus> Sleds<SPI> {
             .unwrap()
             .write(gamma(data.iter().cloned()))
             .unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        task::block_on(async {
+            timer::sleep_millis(1000).await;
+        });
 
         // load default hsv
         let (hue, sat, val) = nvs::get_hsv().unwrap();
@@ -191,8 +196,9 @@ impl<SPI: SpiBus> Sleds<SPI> {
         });
 
         // Use global helper functions for better task management
-        global::yield_to_other_tasks();
-        global::reset_task_watchdog();
+        task::block_on(async {
+            global::yield_to_other_tasks().await;
+        });
     }
 
     pub fn turn_on_all(&mut self) {

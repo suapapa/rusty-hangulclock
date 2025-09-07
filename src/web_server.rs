@@ -1,7 +1,8 @@
-use embassy_time::{Duration, Timer};
 use esp_idf_svc::hal::io::EspIOError;
 use esp_idf_svc::http::server::{Configuration, EspHttpServer, Method};
 use log::{info, warn};
+
+use crate::timer;
 
 pub async fn start_web_server() -> anyhow::Result<()> {
     // Set the HTTP server
@@ -128,7 +129,7 @@ pub async fn start_web_server() -> anyhow::Result<()> {
 
     loop {
         // server.poll().await;
-        Timer::after(Duration::from_millis(1000)).await;
+        timer::sleep_secs(1).await;
     }
 }
 

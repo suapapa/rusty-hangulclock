@@ -1,12 +1,11 @@
 use std::time;
 
-use embassy_time::{Duration, Timer};
 use esp_idf_svc::hal::i2c::*;
 use esp_idf_svc::hal::reset::restart;
 use log::{debug, info, warn};
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
 
-use crate::{global, net, nvs};
+use crate::{global, net, nvs, timer};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MenuOption {
@@ -114,7 +113,7 @@ pub async fn menu_loop(
     const WATCHDOG_INTERVAL: u32 = 200; // 50ms * 200 = 10초마다 체크
 
     loop {
-        Timer::after(Duration::from_millis(50)).await;
+        timer::sleep_millis(50).await;
 
         // Watchdog 체크
         watchdog_counter += 1;
@@ -126,7 +125,7 @@ pub async fn menu_loop(
 
         // Yield to other tasks periodically
         if watchdog_counter % 20 == 0 {
-            Timer::after(Duration::from_millis(1)).await;
+            global::yield_to_other_tasks().await;
         }
         let in_menu = {
             let in_menu = global::IN_MENU.lock().unwrap();
@@ -244,7 +243,7 @@ pub async fn menu_loop(
 
                 if p_sel.is_low().unwrap() {
                     sub_menu = false;
-                    Timer::after(Duration::from_millis(200)).await;
+                    timer::sleep_millis(200).await;
                     match current_menu {
                         MenuOption::LedHue | MenuOption::LedSat | MenuOption::LedVal => {
                             let hue = *global::LED_HUE.lock().unwrap();
@@ -256,7 +255,7 @@ pub async fn menu_loop(
                             let offset = *global::UTC_OFFSET.lock().unwrap();
                             nvs::set_utc_offset(offset as i32).unwrap();
 
-                            Timer::after(Duration::from_millis(1000)).await;
+                            timer::sleep_millis(1000).await;
                             esp_idf_svc::hal::reset::restart();
                         }
                         _ => {}
@@ -304,7 +303,7 @@ pub async fn menu_loop(
                                         info!("NTP selected");
                                         if !net::set_net_cmd("NTP") {
                                             warn!("Failed to send NTP cmd");
-                                            Timer::after(Duration::from_secs(1)).await;
+                                            timer::sleep_secs(1).await;
                                             continue;
                                         }
                                         draw_text(
@@ -317,7 +316,7 @@ pub async fn menu_loop(
                                         )?;
 
                                         loop {
-                                            Timer::after(Duration::from_millis(1000)).await;
+                                            timer::sleep_millis(1000).await;
 
                                             let result = net::get_result_net();
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
@@ -332,7 +331,7 @@ pub async fn menu_loop(
                                                     ),
                                                 )?;
                                                 net::set_result_net("");
-                                                Timer::after(Duration::from_millis(1000)).await;
+                                                timer::sleep_millis(1000).await;
                                                 {
                                                     let mut in_menu =
                                                         global::IN_MENU.lock().unwrap();
@@ -346,7 +345,7 @@ pub async fn menu_loop(
                                         info!("AP MODE selected");
                                         if !net::set_net_cmd("AP") {
                                             warn!("Failed to send AP cmd");
-                                            Timer::after(Duration::from_secs(1)).await;
+                                            timer::sleep_secs(1).await;
                                             continue;
                                         }
                                         draw_text(
@@ -358,7 +357,7 @@ pub async fn menu_loop(
                                             ),
                                         )?;
                                         loop {
-                                            Timer::after(Duration::from_millis(100)).await;
+                                            timer::sleep_millis(100).await;
                                             // if press button, reboot
                                             if p_sel.is_low().unwrap() {
                                                 info!("reboot");
@@ -378,7 +377,7 @@ pub async fn menu_loop(
                                         info!("WPS selected");
                                         if !net::set_net_cmd("WPS") {
                                             warn!("Failed to send WPS cmd");
-                                            Timer::after(Duration::from_secs(1)).await;
+                                            timer::sleep_secs(1).await;
                                             continue;
                                         }
                                         draw_text(
@@ -390,7 +389,7 @@ pub async fn menu_loop(
                                             ),
                                         )?;
                                         loop {
-                                            Timer::after(Duration::from_millis(1000)).await;
+                                            timer::sleep_secs(1).await;
 
                                             let result = net::get_result_net();
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
@@ -405,7 +404,7 @@ pub async fn menu_loop(
                                                     ),
                                                 )?;
                                                 net::set_result_net("");
-                                                Timer::after(Duration::from_millis(1000)).await;
+                                                timer::sleep_secs(1).await;
                                                 {
                                                     let mut in_menu =
                                                         global::IN_MENU.lock().unwrap();
@@ -419,7 +418,7 @@ pub async fn menu_loop(
                                         info!("OTA selected");
                                         if !net::set_net_cmd("OTA") {
                                             warn!("Failed to send OTA cmd");
-                                            Timer::after(Duration::from_secs(1)).await;
+                                            timer::sleep_secs(1).await;
                                             continue;
                                         }
                                         draw_text(
@@ -431,7 +430,7 @@ pub async fn menu_loop(
                                             ),
                                         )?;
                                         loop {
-                                            Timer::after(Duration::from_millis(10)).await;
+                                            timer::sleep_millis(10).await;
 
                                             let result = net::get_result_net();
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
@@ -446,7 +445,7 @@ pub async fn menu_loop(
                                                     ),
                                                 )?;
                                                 net::set_result_net("");
-                                                Timer::after(Duration::from_millis(1000)).await;
+                                                timer::sleep_secs(1).await;
                                                 {
                                                     let mut in_menu =
                                                         global::IN_MENU.lock().unwrap();
@@ -471,12 +470,12 @@ pub async fn menu_loop(
                                     | MenuOption::LedVal => {
                                         // LED color settings
                                         sub_menu = true;
-                                        Timer::after(Duration::from_millis(200)).await;
+                                        timer::sleep_millis(200).await;
                                     }
                                     MenuOption::UtcOffset => {
                                         // UTC OFFSET
                                         sub_menu = true;
-                                        Timer::after(Duration::from_millis(200)).await;
+                                        timer::sleep_millis(200).await;
                                     }
                                     MenuOption::Exit => {
                                         // EXIT
@@ -489,7 +488,7 @@ pub async fn menu_loop(
                                                 menu_len,
                                             ),
                                         )?;
-                                        Timer::after(Duration::from_millis(1000)).await;
+                                        timer::sleep_secs(1).await;
                                         {
                                             let mut in_menu = global::IN_MENU.lock().unwrap();
                                             *in_menu = false;

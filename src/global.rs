@@ -7,6 +7,8 @@ use std::time;
 
 use lazy_static::lazy_static;
 
+use crate::timer;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RotaryEvent {
     None,
@@ -32,7 +34,7 @@ lazy_static! {
 pub fn get_uptime() -> u128 {
     let now = time::SystemTime::now();
     let timestamp = match now.duration_since(time::UNIX_EPOCH) {
-        Ok(duration) => duration.as_millis(),
+        Ok(duration) => duration.as_secs() as u128,
         Err(_) => {
             // 시스템 시간 오류 시 0 반환
             return 0;
@@ -95,14 +97,17 @@ pub fn reset_task_watchdog() {
 }
 
 /// Yield control to other tasks briefly
-pub fn yield_to_other_tasks() {
+pub async fn yield_to_other_tasks() {
+    reset_task_watchdog();
+
     #[cfg(target_os = "espidf")]
     unsafe {
         esp_idf_svc::sys::vTaskDelay(1);
     }
 
-    #[cfg(not(target_os = "espidf"))]
-    std::thread::sleep(std::time::Duration::from_micros(100));
+    // #[cfg(not(target_os = "espidf"))]
+    // std::thread::sleep(std::time::Duration::from_micros(100));
+    timer::sleep_millis(1).await;
 }
 
 /// Safely register current task with Task Watchdog Timer

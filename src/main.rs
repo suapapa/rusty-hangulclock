@@ -6,6 +6,7 @@ mod ota_update;
 mod panel;
 mod report;
 mod rotary;
+mod timer;
 mod web_server;
 
 // use smart_leds::{gamma, hsv::hsv2rgb, hsv::Hsv, SmartLedsWrite, RGB8};
@@ -14,7 +15,6 @@ use std::time;
 #[cfg(feature = "dotstar")]
 use apa102_spi::MODE as SPI_MODE;
 use chrono::prelude::*;
-use embassy_time::{Duration, Timer};
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 // use embedded_hal::spi::MODE_3;
 use esp_idf_svc::hal::gpio::*;
@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
     info!("Hello, RustyHangulClock!");
 
     // Register main task with Task Watchdog Timer
-    let _wdt_registered = global::register_task_with_wdt("main_task");
+    // let _wdt_registered = global::register_task_with_wdt("main_task");
 
     let p = Peripherals::take()?;
 
@@ -62,10 +62,10 @@ fn main() -> anyhow::Result<()> {
     let mut menu_r2 = PinDriver::input(p_menu_r2)?;
     menu_r2.set_pull(Pull::Up)?;
 
+    // reset oled display
     // let mut disp_res = PinDriver::output(p_oled_res)?;
     // disp_res.set_low().unwrap();
-    // std::thread::sleep(time::Duration::from_millis(100));
-    // // Timer::after(Duration::from_millis(100)).await;
+    // timer::sleep_millis(100);
     // disp_res.set_high().unwrap();
 
     let i2c_config = I2cConfig::new().baudrate(50.kHz().into());
@@ -139,25 +139,26 @@ fn main() -> anyhow::Result<()> {
     info!("Starting tasks...");
     task::block_on(async {
         // Start a watchdog reset task for the main thread
-        let watchdog_task = async {
-            let mut watchdog_counter = 0;
-            const WATCHDOG_INTERVAL: u32 = 1000; // Reset every 10 seconds (100ms * 1000)
+        // let watchdog_task = async {
+        //     let mut watchdog_counter = 0;
+        //     const WATCHDOG_INTERVAL: u32 = 500; // Reset every 5 seconds (100ms *
+        // 500)
 
-            loop {
-                Timer::after(Duration::from_millis(100)).await;
-                watchdog_counter += 1;
+        //     loop {
+        //         timer::sleep_millis(100).await;
+        //         watchdog_counter += 1;
 
-                if watchdog_counter >= WATCHDOG_INTERVAL {
-                    debug!("Main task watchdog reset");
-                    global::reset_task_watchdog();
-                    watchdog_counter = 0;
-                }
-            }
+        //         if watchdog_counter >= WATCHDOG_INTERVAL {
+        //             debug!("Main task watchdog reset");
+        //             global::reset_task_watchdog();
+        //             watchdog_counter = 0;
+        //         }
+        //     }
 
-            // This will never be reached, but provides the return type
-            #[allow(unreachable_code)]
-            Ok::<(), anyhow::Error>(())
-        };
+        //     // This will never be reached, but provides the return type
+        //     #[allow(unreachable_code)]
+        //     Ok::<(), anyhow::Error>(())
+        // };
 
         match futures::try_join!(
             menu_task,
@@ -165,7 +166,7 @@ fn main() -> anyhow::Result<()> {
             time_sync_task,
             show_time_task,
             rotary_encoder_task,
-            watchdog_task,
+            // watchdog_task,
         ) {
             Ok(_) => info!("All tasks completed"),
             Err(e) => info!("Error in task: {e:?}"),
@@ -183,7 +184,7 @@ async fn time_sync_loop() -> anyhow::Result<()> {
     // Register with Task Watchdog Timer
     let _wdt_registered = global::register_task_with_wdt("time_sync_loop");
 
-    let sync_check_interval = Duration::from_secs(60 * 60); // 1 hour
+    let sync_check_interval_secs = 60; // 1 hour
     let mut sync_check_cnt = 0;
 
     // Watchdog 카운터 추가
@@ -200,60 +201,66 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             global::reset_task_watchdog();
         }
 
-        Timer::after(sync_check_interval).await;
+        timer::sleep_secs(sync_check_interval_secs).await;
+
         match net::get_net_cmd() {
             Ok(cmd) => {
                 if !cmd.is_empty() {
                     debug!("skip time sync loop due to net cmd: {cmd}");
-                    Timer::after(Duration::from_millis(50)).await;
+                    timer::sleep_millis(50).await;
                     continue;
                 }
             }
             Err(e) => {
                 warn!("Failed to get net cmd: {e}");
-                Timer::after(Duration::from_millis(50)).await;
+                timer::sleep_millis(50).await;
                 continue;
             }
         }
 
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
-            Timer::after(Duration::from_millis(1)).await;
+            global::yield_to_other_tasks().await;
         }
 
+        // Every 24 hours
         sync_check_cnt += 1;
-        if sync_check_cnt >= 24 {
+        if sync_check_cnt >= 60 * 24 {
             sync_check_cnt = 0;
         }
 
         if sync_check_cnt == 0 {
             info!("Syncing time...");
+
+            // esp_idf_svc::hal::reset::restart();
+
             if !net::set_net_cmd("NTP") {
                 warn!("Failed to send NTP cmd");
-                Timer::after(Duration::from_secs(1)).await;
+                timer::sleep_secs(1).await;
                 continue;
             }
 
-            // // NTP 동기화 루프에 타임아웃 추가
-            // let mut timeout_count = 0;
-            // const MAX_TIMEOUT: u8 = 30; // 30초 타임아웃
+            // NTP 동기화 루프에 타임아웃 추가
+            let mut timeout_count = 0;
+            const MAX_TIMEOUT: u8 = 30; // 30초 타임아웃
 
-            // loop {
-            //     Timer::after(Duration::from_secs(1)).await;
-            //     timeout_count += 1;
+            loop {
+                timer::sleep_secs(1).await;
+                timeout_count += 1;
 
-            //     if timeout_count >= MAX_TIMEOUT {
-            //         warn!("NTP sync timeout, breaking loop");
-            //         break;
-            //     }
+                if timeout_count >= MAX_TIMEOUT {
+                    warn!("NTP sync timeout, breaking loop");
+                    break;
+                }
 
-            //     let result = net::get_result_net();
-            //     if result.as_str() == "OK" || result.as_str() == "NG" {
-            //         info!("NTP cmd completed: {}", result.as_str());
-            //         net::set_result_net("");
-            //         break;
-            //     }
-            // }
+                let result = net::get_result_net();
+                if result.as_str() == "OK" || result.as_str() == "NG" {
+                    info!("NTP cmd completed: {}", result.as_str());
+                    net::set_result_net("");
+                    break;
+                }
+            }
+            net::set_result_net("");
         }
     }
 }
@@ -297,20 +304,20 @@ where
 
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
-            Timer::after(Duration::from_millis(1)).await;
+            global::yield_to_other_tasks().await;
         }
 
         match net::get_net_cmd() {
             Ok(cmd) => {
                 if !cmd.is_empty() {
                     debug!("skip show time loop due to net cmd: {cmd}");
-                    Timer::after(Duration::from_millis(50)).await;
+                    timer::sleep_secs(1).await;
                     continue;
                 }
             }
             Err(e) => {
                 warn!("Failed to get net cmd: {e}");
-                Timer::after(Duration::from_millis(50)).await;
+                timer::sleep_secs(1).await;
                 continue;
             }
         }
@@ -321,7 +328,7 @@ where
             }
             Err(_) => {
                 debug!("IN_MENU in use");
-                Timer::after(Duration::from_secs(1)).await;
+                timer::sleep_secs(1).await;
                 continue;
             }
         }
@@ -334,7 +341,7 @@ where
             }
             Err(_) => {
                 debug!("TIME_SYNCED in use");
-                Timer::after(Duration::from_secs(1)).await;
+                timer::sleep_secs(1).await;
                 continue;
             }
         }
@@ -343,7 +350,7 @@ where
             sleds.turn_on_all();
             last_h = 0;
             last_m = 0;
-            Timer::after(Duration::from_secs(1)).await;
+            timer::sleep_secs(1).await;
             continue;
         }
 
@@ -375,7 +382,7 @@ where
             debug!("Time updated, h: {h}, m: {m}");
             sleds.show_time(h, m);
         }
-        Timer::after(Duration::from_secs(1)).await;
+        timer::sleep_secs(1).await;
     }
 
     // Note: TWDT unregistration is handled automatically when task ends
