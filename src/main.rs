@@ -40,7 +40,10 @@ fn main() -> anyhow::Result<()> {
     info!("Hello, RustyHangulClock!");
 
     // Register main task with Task Watchdog Timer
-    // let _wdt_registered = global::register_task_with_wdt("main_task");
+    let _wdt_registered = global::register_task_with_wdt("main_task");
+    if !_wdt_registered {
+        warn!("Failed to register with TWDT - will run without watchdog protection");
+    }
 
     let p = Peripherals::take()?;
 
@@ -139,26 +142,25 @@ fn main() -> anyhow::Result<()> {
     info!("Starting tasks...");
     task::block_on(async {
         // Start a watchdog reset task for the main thread
-        // let watchdog_task = async {
-        //     let mut watchdog_counter = 0;
-        //     const WATCHDOG_INTERVAL: u32 = 500; // Reset every 5 seconds (100ms *
-        // 500)
+        let watchdog_task = async {
+            let mut watchdog_counter = 0;
+            const WATCHDOG_INTERVAL: u32 = 500; // Reset every 5 seconds (100ms * 500)
 
-        //     loop {
-        //         timer::sleep_millis(100).await;
-        //         watchdog_counter += 1;
+            loop {
+                timer::sleep_millis(100).await;
+                watchdog_counter += 1;
 
-        //         if watchdog_counter >= WATCHDOG_INTERVAL {
-        //             debug!("Main task watchdog reset");
-        //             global::reset_task_watchdog();
-        //             watchdog_counter = 0;
-        //         }
-        //     }
+                if watchdog_counter >= WATCHDOG_INTERVAL {
+                    debug!("Main task watchdog reset");
+                    global::reset_task_watchdog();
+                    watchdog_counter = 0;
+                }
+            }
 
-        //     // This will never be reached, but provides the return type
-        //     #[allow(unreachable_code)]
-        //     Ok::<(), anyhow::Error>(())
-        // };
+            // This will never be reached, but provides the return type
+            #[allow(unreachable_code)]
+            Ok::<(), anyhow::Error>(())
+        };
 
         match futures::try_join!(
             menu_task,
@@ -166,7 +168,7 @@ fn main() -> anyhow::Result<()> {
             time_sync_task,
             show_time_task,
             rotary_encoder_task,
-            // watchdog_task,
+            watchdog_task,
         ) {
             Ok(_) => info!("All tasks completed"),
             Err(e) => info!("Error in task: {e:?}"),
@@ -180,9 +182,6 @@ fn main() -> anyhow::Result<()> {
 
 async fn time_sync_loop() -> anyhow::Result<()> {
     info!("Starting time_sync_loop()...");
-
-    // Register with Task Watchdog Timer
-    let _wdt_registered = global::register_task_with_wdt("time_sync_loop");
 
     let sync_check_interval_secs = 60; // 1 hour
     let mut sync_check_cnt = 0;
@@ -276,11 +275,6 @@ where
     SPI: embedded_hal::spi::SpiBus,
 {
     info!("Starting show_time_loop()...");
-
-    // Register with Task Watchdog Timer
-    let _wdt_registered = global::register_task_with_wdt("show_time_loop");
-
-    //sleds.turn_on_all();
 
     let mut skip_display: bool; // = false;
     let mut last_h: u8 = 0;

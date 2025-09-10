@@ -98,9 +98,6 @@ pub async fn menu_loop(
 ) -> anyhow::Result<()> {
     info!("Starting menu_loop()...");
 
-    // Register with Task Watchdog Timer
-    let _wdt_registered = global::register_task_with_wdt("menu_loop");
-
     let mut current_menu = MenuOption::Wps;
     let menu_options = MenuOption::all();
     let menu_len = menu_options.len();
@@ -316,7 +313,7 @@ pub async fn menu_loop(
                                         )?;
 
                                         loop {
-                                            timer::sleep_millis(1000).await;
+                                            timer::sleep_secs(1).await;
 
                                             let result = net::get_result_net();
                                             if result.as_str() == "OK" || result.as_str() == "NG" {
@@ -331,7 +328,7 @@ pub async fn menu_loop(
                                                     ),
                                                 )?;
                                                 net::set_result_net("");
-                                                timer::sleep_millis(1000).await;
+                                                timer::sleep_secs(1).await;
                                                 {
                                                     let mut in_menu =
                                                         global::IN_MENU.lock().unwrap();

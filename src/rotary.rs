@@ -11,9 +11,6 @@ pub async fn rotary_encoder_loop(
 ) -> anyhow::Result<()> {
     info!("Starting rotary_encoder_loop()...");
 
-    // Register with Task Watchdog Timer
-    let _wdt_registered = global::register_task_with_wdt("rotary_encoder_loop");
-
     let mut enc = Rotary::new(menu_r1, menu_r2);
     // let mut ticker = Ticker::every(Duration::from_millis(10));
     let mut last_direction = Direction::None;

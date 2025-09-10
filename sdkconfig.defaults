@@ -8,7 +8,7 @@ CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
 
 # Additional watchdog settings for long-running tasks
-CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_PANIC=n
 CONFIG_ESP_TASK_WDT_USE_ESP_TIMER=y
 
 # Use this to set FreeRTOS kernel tick frequency to 1000 Hz (100 Hz by default).

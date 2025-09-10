@@ -27,9 +27,6 @@ pub async fn net_loop(
     // debug_led.set_high().unwrap();
     info!("Starting net_loop()...");
 
-    // Register with Task Watchdog Timer
-    let _wdt_registered = global::register_task_with_wdt("net_loop");
-
     info!("Triggering initial time sync...");
     if !set_net_cmd("NTP") {
         warn!("Failed to send NTP cmd");
@@ -203,50 +200,80 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
         },
     };
 
-    match wifi.start_wps(&wps_config).await? {
-        WpsStatus::SuccessConnected => (),
-        WpsStatus::SuccessMultipleAccessPoints(credentials) => {
-            log::info!("received multiple credentials, connecting to first one:");
-            for i in &credentials {
-                log::info!(" - ssid: {}", i.ssid);
-            }
-            let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
-                ssid: credentials[0].ssid.clone(),
-                bssid: None,
-                auth_method: AuthMethod::WPA2Personal,
-                password: credentials[1].passphrase.clone(),
-                channel: None,
-                ..Default::default()
-            });
-            wifi.set_configuration(&wifi_configuration)?;
+    let mut retryies = 5;
+    loop {
+        retryies -= 1;
+        if retryies == 0 {
+            return Err(anyhow::anyhow!("WPS failed"));
         }
-        WpsStatus::Failure => anyhow::bail!("WPS failure"),
-        WpsStatus::Timeout => anyhow::bail!("WPS timeout"),
-        WpsStatus::Pin(_) => anyhow::bail!("WPS pin"),
-        WpsStatus::PbcOverlap => anyhow::bail!("WPS PBC overlap"),
+        match wifi.start_wps(&wps_config).await {
+            Ok(WpsStatus::SuccessConnected) => {
+                info!("WPS success connected");
+                break;
+            }
+            Ok(WpsStatus::SuccessMultipleAccessPoints(credentials)) => {
+                log::info!("received multiple credentials, connecting to first one:");
+                for i in &credentials {
+                    log::info!(" - ssid: {}", i.ssid);
+                }
+                let wifi_configuration: Configuration =
+                    Configuration::Client(ClientConfiguration {
+                        ssid: credentials[0].ssid.clone(),
+                        bssid: None,
+                        auth_method: AuthMethod::WPA2Personal,
+                        password: credentials[1].passphrase.clone(),
+                        channel: None,
+                        ..Default::default()
+                    });
+                wifi.set_configuration(&wifi_configuration)?;
+                break;
+            }
+            Ok(WpsStatus::Failure) => {
+                info!("WPS failure");
+                global::yield_to_other_tasks().await;
+                timer::sleep_secs(3).await;
+                continue;
+            }
+            Ok(WpsStatus::Timeout) => {
+                info!("WPS timeout");
+                global::yield_to_other_tasks().await;
+                timer::sleep_secs(3).await;
+                continue;
+            }
+            Ok(WpsStatus::Pin(_)) => {
+                return Err(anyhow::anyhow!("WPS pin"));
+            }
+            Ok(WpsStatus::PbcOverlap) => {
+                return Err(anyhow::anyhow!("WPS PBC overlap"));
+            }
+            Err(e) => {
+                return Err(anyhow::anyhow!("WPS error: {e:?}"));
+            }
+        }
     }
 
-    match wifi.get_configuration()? {
-        Configuration::Client(config) => {
+    match wifi.get_configuration() {
+        Ok(Configuration::Client(config)) => {
             info!("Successfully connected to {} using WPS", config.ssid);
             nvs::set_wifi_cred(&config.ssid.clone(), &config.password.clone())?;
         }
-        _ => anyhow::bail!("Not in station mode"),
+        _ => return Err(anyhow::anyhow!("Not in station mode")),
     };
 
+    info!("Starting SNTP and send report...");
     wifi.connect().await?;
     info!("Wifi connected");
 
     wifi.wait_netif_up().await?;
     info!("Wifi netif up");
 
-    // Add delay to ensure network is fully initialized
-    timer::sleep_secs(3).await; // Increased from 2s to 3s
-    info!("Network initialization delay completed");
+    // // Add delay to ensure network is fully initialized
+    // timer::sleep_secs(3).await; // Increased from 2s to 3s
+    // info!("Network initialization delay completed");
 
-    // Additional network stability check
-    timer::sleep_millis(500).await;
-    info!("Additional network stability delay completed");
+    // // Additional network stability check
+    // timer::sleep_millis(500).await;
+    // info!("Additional network stability delay completed");
 
     match sync_time_without_wifi().await {
         Ok(_) => {
@@ -286,22 +313,34 @@ async fn sync_time_without_wifi() -> anyhow::Result<bool> {
     let sntp = sntp::EspSntp::new(&sntp_conf).expect("Failed to create SNTP");
     let mut retry = 5;
     loop {
+        retry -= 1;
         if retry == 0 {
             return Err(anyhow::anyhow!("Failed to sync time"));
         }
-        // global::yield_to_other_tasks().await;
-        if sntp.get_sync_status() == sntp::SyncStatus::Completed {
-            info!("SNTP synced");
-            if !last_time_synced {
-                info!("Setting initial time_synced");
-                let mut time_synced = global::TIME_SYNCED.lock().unwrap();
-                *time_synced = true;
-            }
-            return Ok(true);
-        }
         info!("Waiting for SNTP sync...");
-        timer::sleep_secs(5).await;
-        retry -= 1;
+        match sntp.get_sync_status() {
+            sntp::SyncStatus::Completed => {
+                info!("SNTP synced");
+                if !last_time_synced {
+                    info!("Setting initial time_synced");
+                    let mut time_synced = global::TIME_SYNCED.lock().unwrap();
+                    *time_synced = true;
+                }
+                return Ok(true);
+            }
+            sntp::SyncStatus::Reset => {
+                warn!("SNTP reset");
+                global::yield_to_other_tasks().await;
+                timer::sleep_secs(3).await;
+                continue;
+            }
+            sntp::SyncStatus::InProgress => {
+                info!("SNTP in progress");
+                global::yield_to_other_tasks().await;
+                timer::sleep_secs(3).await;
+                continue;
+            }
+        }
     }
 }
 
@@ -366,13 +405,13 @@ pub async fn sync_time_and_send_report(
     wifi.wait_netif_up().await?;
     info!("Wifi netif up");
 
-    // Add delay to ensure network is fully initialized
-    timer::sleep_secs(3).await; // Increased from 2s to 3s
-    info!("Network initialization delay completed");
+    // // Add delay to ensure network is fully initialized
+    // timer::sleep_secs(3).await; // Increased from 2s to 3s
+    // info!("Network initialization delay completed");
 
-    // Additional network stability check
-    timer::sleep_millis(500).await;
-    info!("Additional network stability delay completed");
+    // // Additional network stability check
+    // timer::sleep_millis(500).await;
+    // info!("Additional network stability delay completed");
 
     match sync_time_without_wifi().await {
         Ok(_) => {
@@ -467,13 +506,13 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
     wifi.wait_netif_up().await?;
     info!("Wifi netif up");
 
-    // Add delay to ensure network is fully initialized
-    timer::sleep_secs(3).await; // Increased from 2s to 3s
-    info!("Network initialization delay completed");
+    // // Add delay to ensure network is fully initialized
+    // timer::sleep_secs(3).await; // Increased from 2s to 3s
+    // info!("Network initialization delay completed");
 
-    // Additional network stability check
-    timer::sleep_millis(500).await;
-    info!("Additional network stability delay completed");
+    // // Additional network stability check
+    // timer::sleep_millis(500).await;
+    // info!("Additional network stability delay completed");
 
     let ota_result = ota_update::ota_update().await;
     match ota_result {
@@ -530,13 +569,14 @@ fn clear_net_cmd() -> bool {
 }
 
 pub fn set_result_net(result: &str) -> bool {
-    match global::RESULT_NET.try_lock() {
+    match global::RESULT_NET.lock() {
         Ok(mut result_net) => {
             *result_net = result.to_string();
+            info!("RESULT_NET set to \"{result}\"");
             true
         }
         Err(_) => {
-            warn!("Failed to set RESULT_NET");
+            warn!("Failed to set RESULT_NET to \"{result}\"");
             false
         }
     }
