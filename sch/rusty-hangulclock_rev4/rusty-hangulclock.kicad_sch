@@ -5213,7 +5213,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "PCM_JLCPCB-Resistors:0402,56kΩ"
+		(symbol "PCM_JLCPCB-Resistors:0402,5.1kΩ"
 			(pin_numbers
 				(hide yes)
 			)
@@ -5232,7 +5232,7 @@
 					(justify left)
 				)
 			)
-			(property "Value" "56kΩ"
+			(property "Value" "5.1kΩ"
 				(at 0 0 90)
 				(do_not_autoplace)
 				(effects
@@ -5250,7 +5250,7 @@
 					(hide yes)
 				)
 			)
-			(property "Datasheet" "https://www.lcsc.com/datasheet/lcsc_datasheet_2411221126_UNI-ROYAL-Uniroyal-Elec-0402WGF5602TCE_C25796.pdf"
+			(property "Datasheet" "https://www.lcsc.com/datasheet/lcsc_datasheet_2206010045_UNI-ROYAL-Uniroyal-Elec-0402WGF5101TCE_C25905.pdf"
 				(at 0 0 0)
 				(effects
 					(font
@@ -5259,7 +5259,7 @@
 					(hide yes)
 				)
 			)
-			(property "Description" "62.5mW Thick Film Resistors 50V ±100ppm/°C ±1% 56kΩ 0402 Chip Resistor - Surface Mount ROHS"
+			(property "Description" "62.5mW Thick Film Resistors 50V ±100ppm/°C ±1% 5.1kΩ 0402 Chip Resistor - Surface Mount ROHS"
 				(at 0 0 0)
 				(effects
 					(font
@@ -5268,7 +5268,7 @@
 					(hide yes)
 				)
 			)
-			(property "LCSC" "C25796"
+			(property "LCSC" "C25905"
 				(at 0 0 0)
 				(effects
 					(font
@@ -5277,7 +5277,7 @@
 					(hide yes)
 				)
 			)
-			(property "Stock" "437393"
+			(property "Stock" "3534773"
 				(at 0 0 0)
 				(effects
 					(font
@@ -5322,7 +5322,7 @@
 					(hide yes)
 				)
 			)
-			(property "Class" "Preferred Component"
+			(property "Class" "Basic Component"
 				(at 0 0 0)
 				(effects
 					(font
@@ -5349,7 +5349,7 @@
 					(hide yes)
 				)
 			)
-			(property "Part" "0402WGF5602TCE"
+			(property "Part" "0402WGF5101TCE"
 				(at 0 0 0)
 				(effects
 					(font
@@ -5358,7 +5358,7 @@
 					(hide yes)
 				)
 			)
-			(property "Resistance" "56kΩ"
+			(property "Resistance" "5.1kΩ"
 				(at 0 0 0)
 				(effects
 					(font
@@ -5430,7 +5430,7 @@
 					(hide yes)
 				)
 			)
-			(symbol "0402,56kΩ_0_1"
+			(symbol "0402,5.1kΩ_0_1"
 				(rectangle
 					(start -1.016 2.54)
 					(end 1.016 -2.54)
@@ -5443,7 +5443,7 @@
 					)
 				)
 			)
-			(symbol "0402,56kΩ_1_1"
+			(symbol "0402,5.1kΩ_1_1"
 				(pin passive line
 					(at 0 3.81 270)
 					(length 1.27)
@@ -11751,7 +11751,7 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_JLCPCB-Resistors:0402,56kΩ")
+		(lib_id "PCM_JLCPCB-Resistors:0402,5.1kΩ")
 		(at 383.54 210.82 0)
 		(unit 1)
 		(exclude_from_sim no)
@@ -11768,7 +11768,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "56kΩ"
+		(property "Value" "5.1kΩ"
 			(at 383.54 210.82 90)
 			(do_not_autoplace yes)
 			(effects
@@ -11786,7 +11786,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "https://www.lcsc.com/datasheet/lcsc_datasheet_2411221126_UNI-ROYAL-Uniroyal-Elec-0402WGF5602TCE_C25796.pdf"
+		(property "Datasheet" "https://www.lcsc.com/datasheet/lcsc_datasheet_2206010045_UNI-ROYAL-Uniroyal-Elec-0402WGF5101TCE_C25905.pdf"
 			(at 383.54 210.82 0)
 			(effects
 				(font
@@ -11795,7 +11795,7 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "62.5mW Thick Film Resistors 50V ±100ppm/°C ±1% 56kΩ 0402 Chip Resistor - Surface Mount ROHS"
+		(property "Description" "62.5mW Thick Film Resistors 50V ±100ppm/°C ±1% 5.1kΩ 0402 Chip Resistor - Surface Mount ROHS"
 			(at 383.54 210.82 0)
 			(effects
 				(font
@@ -11804,7 +11804,7 @@
 				(hide yes)
 			)
 		)
-		(property "LCSC" "C25796"
+		(property "LCSC" "C25905"
 			(at 383.54 210.82 0)
 			(effects
 				(font
@@ -11813,7 +11813,7 @@
 				(hide yes)
 			)
 		)
-		(property "Stock" "437393"
+		(property "Stock" "3534773"
 			(at 383.54 210.82 0)
 			(effects
 				(font
@@ -11858,7 +11858,7 @@
 				(hide yes)
 			)
 		)
-		(property "Class" "Preferred Component"
+		(property "Class" "Basic Component"
 			(at 383.54 210.82 0)
 			(effects
 				(font
@@ -11885,7 +11885,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part" "0402WGF5602TCE"
+		(property "Part" "0402WGF5101TCE"
 			(at 383.54 210.82 0)
 			(effects
 				(font
@@ -11894,7 +11894,7 @@
 				(hide yes)
 			)
 		)
-		(property "Resistance" "56kΩ"
+		(property "Resistance" "5.1kΩ"
 			(at 383.54 210.82 0)
 			(effects
 				(font
@@ -19617,7 +19617,7 @@
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
-		(on_board yes)
+		(on_board no)
 		(dnp yes)
 		(fields_autoplaced yes)
 		(uuid "60b49599-6c1b-4608-8746-e033751b795f")
@@ -22449,7 +22449,7 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_JLCPCB-Resistors:0402,56kΩ")
+		(lib_id "PCM_JLCPCB-Resistors:0402,5.1kΩ")
 		(at 391.16 210.82 0)
 		(unit 1)
 		(exclude_from_sim no)
@@ -22467,7 +22467,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "56kΩ"
+		(property "Value" "5.1kΩ"
 			(at 391.16 210.82 90)
 			(do_not_autoplace yes)
 			(effects
@@ -22485,7 +22485,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "https://www.lcsc.com/datasheet/lcsc_datasheet_2411221126_UNI-ROYAL-Uniroyal-Elec-0402WGF5602TCE_C25796.pdf"
+		(property "Datasheet" "https://www.lcsc.com/datasheet/lcsc_datasheet_2206010045_UNI-ROYAL-Uniroyal-Elec-0402WGF5101TCE_C25905.pdf"
 			(at 391.16 210.82 0)
 			(effects
 				(font
@@ -22494,7 +22494,7 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "62.5mW Thick Film Resistors 50V ±100ppm/°C ±1% 56kΩ 0402 Chip Resistor - Surface Mount ROHS"
+		(property "Description" "62.5mW Thick Film Resistors 50V ±100ppm/°C ±1% 5.1kΩ 0402 Chip Resistor - Surface Mount ROHS"
 			(at 391.16 210.82 0)
 			(effects
 				(font
@@ -22503,7 +22503,7 @@
 				(hide yes)
 			)
 		)
-		(property "LCSC" "C25796"
+		(property "LCSC" "C25905"
 			(at 391.16 210.82 0)
 			(effects
 				(font
@@ -22512,7 +22512,7 @@
 				(hide yes)
 			)
 		)
-		(property "Stock" "437393"
+		(property "Stock" "3534773"
 			(at 391.16 210.82 0)
 			(effects
 				(font
@@ -22557,7 +22557,7 @@
 				(hide yes)
 			)
 		)
-		(property "Class" "Preferred Component"
+		(property "Class" "Basic Component"
 			(at 391.16 210.82 0)
 			(effects
 				(font
@@ -22584,7 +22584,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part" "0402WGF5602TCE"
+		(property "Part" "0402WGF5101TCE"
 			(at 391.16 210.82 0)
 			(effects
 				(font
@@ -22593,7 +22593,7 @@
 				(hide yes)
 			)
 		)
-		(property "Resistance" "56kΩ"
+		(property "Resistance" "5.1kΩ"
 			(at 391.16 210.82 0)
 			(effects
 				(font
@@ -23132,9 +23132,9 @@
 		(at 363.22 57.15 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom no)
+		(in_bom yes)
 		(on_board yes)
-		(dnp yes)
+		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "8e7fb438-b053-4b2b-8796-d4f7c951e4cb")
 		(property "Reference" "U1"
@@ -28869,9 +28869,9 @@
 		(at 257.81 190.5 270)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
-		(dnp no)
+		(dnp yes)
 		(fields_autoplaced yes)
 		(uuid "e760e104-9e36-42a3-881b-7884f352c521")
 		(property "Reference" "S1"
