@@ -228,39 +228,44 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             sync_check_cnt = 0;
         }
 
-        if sync_check_cnt == 0 {
-            info!("Syncing time...");
-
-            // esp_idf_svc::hal::reset::restart();
-
-            if !net::set_net_cmd("NTP") {
-                warn!("Failed to send NTP cmd");
-                timer::sleep_secs(1).await;
-                continue;
-            }
-
-            // NTP 동기화 루프에 타임아웃 추가
-            let mut timeout_count = 0;
-            const MAX_TIMEOUT: u8 = 30; // 30초 타임아웃
-
-            loop {
-                timer::sleep_secs(1).await;
-                timeout_count += 1;
-
-                if timeout_count >= MAX_TIMEOUT {
-                    warn!("NTP sync timeout, breaking loop");
-                    break;
-                }
-
-                let result = net::get_result_net();
-                if result.as_str() == "OK" || result.as_str() == "NG" {
-                    info!("NTP cmd completed: {}", result.as_str());
-                    net::set_result_net("");
-                    break;
-                }
-            }
-            net::set_result_net("");
+        if sync_check_cnt != 0 {
+            continue;
         }
+
+        info!("Syncing time...");
+
+        // esp_idf_svc::hal::reset::restart();
+
+        if !net::set_net_cmd("NTP") {
+            warn!("Failed to send NTP cmd");
+            timer::sleep_secs(1).await;
+            continue;
+        }
+
+        // NTP 동기화 루프에 타임아웃 추가
+        let mut timeout_count = 0;
+        const MAX_TRIES: u8 = 6; // 30초 타임아웃
+
+        info!("Waiting for NTP cmd result...");
+        loop {
+            let result = net::get_result_net();
+            let result_str = result.as_str();
+            if result_str == "OK" || result_str == "NG" {
+                info!("NTP cmd completed: {}", result.as_str());
+                timer::sleep_secs(1).await;
+                break;
+            }
+            info!("NTP cmd result: {result_str}");
+            timer::sleep_secs(5).await;
+            timeout_count += 1;
+            info!("Timeout count: {timeout_count}");
+            if timeout_count >= MAX_TRIES {
+                warn!("NTP sync timeout, breaking loop");
+                break;
+            }
+        }
+        info!("NTP cmd completed");
+        net::set_result_net("");
     }
 }
 

@@ -104,7 +104,6 @@ pub async fn net_loop(
                             set_result_net("NG");
                         }
                     }
-
                     clear_net_cmd();
                 }
                 if cmd == "OTA" {
