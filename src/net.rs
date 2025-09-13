@@ -38,6 +38,9 @@ pub async fn net_loop(
     let mut watchdog_counter = 0;
     const WATCHDOG_INTERVAL: u32 = 100; // 100ms * 100 = 10초마다 체크
 
+    let mut auto_time_sync_check_cnt = 0; // 24 hours 마다 수행
+    const AUTO_TIME_SYNC_CHECK_INTERVAL: u32 = 10 * 60 * 60 * 24; // 24 hours
+
     loop {
         timer::sleep_millis(100).await;
 
@@ -56,6 +59,15 @@ pub async fn net_loop(
         // Yield to other tasks periodically
         if watchdog_counter % 10 == 0 {
             global::yield_to_other_tasks().await;
+        }
+
+        auto_time_sync_check_cnt += 1;
+        if auto_time_sync_check_cnt >= AUTO_TIME_SYNC_CHECK_INTERVAL {
+            info!("Auto time sync check");
+            auto_time_sync_check_cnt = 0;
+            if !set_net_cmd("NTP") {
+                warn!("Failed to send NTP cmd");
+            }
         }
 
         match get_net_cmd() {

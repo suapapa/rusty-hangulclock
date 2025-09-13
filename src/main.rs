@@ -133,14 +133,14 @@ fn main() -> anyhow::Result<()> {
         Ok::<(), anyhow::Error>(())
     })?;
 
-    let net_task = net::net_loop(&mut wifi);
-    let show_time_task = show_time_loop(&mut sleds);
-    let menu_task = menu::menu_loop(&mut disp, menu_sel);
-    let time_sync_task = time_sync_loop();
-    let rotary_encoder_task = rotary::rotary_encoder_loop(menu_r2, menu_r1);
-
     info!("Starting tasks...");
     task::block_on(async {
+        let net_task = net::net_loop(&mut wifi);
+        let show_time_task = show_time_loop(&mut sleds);
+        let menu_task = menu::menu_loop(&mut disp, menu_sel);
+        // let time_sync_task = time_sync_loop();
+        let rotary_encoder_task = rotary::rotary_encoder_loop(menu_r2, menu_r1);
+
         // Start a watchdog reset task for the main thread
         let watchdog_task = async {
             let mut watchdog_counter = 0;
@@ -165,7 +165,7 @@ fn main() -> anyhow::Result<()> {
         match futures::try_join!(
             menu_task,
             net_task,
-            time_sync_task,
+            // time_sync_task,
             show_time_task,
             rotary_encoder_task,
             watchdog_task,
@@ -180,6 +180,7 @@ fn main() -> anyhow::Result<()> {
     // Ok(())
 }
 
+/*
 async fn time_sync_loop() -> anyhow::Result<()> {
     info!("Starting time_sync_loop()...");
 
@@ -268,6 +269,7 @@ async fn time_sync_loop() -> anyhow::Result<()> {
         net::set_result_net("");
     }
 }
+*/
 
 async fn inc_boot_count() -> anyhow::Result<()> {
     let boot_count = nvs::get_boot_count()?;
