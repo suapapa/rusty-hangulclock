@@ -81,6 +81,7 @@ pub fn get_hw_revision() -> i32 {
 /// Reset the task watchdog timer to prevent timeouts
 /// Only call this from tasks that are registered with TWDT
 pub fn reset_task_watchdog() {
+    /*
     #[cfg(target_os = "espidf")]
     unsafe {
         // Only reset if current task is registered with TWDT
@@ -94,10 +95,12 @@ pub fn reset_task_watchdog() {
             }
         }
     }
+    */
 }
 
 /// Yield control to other tasks briefly
 pub async fn yield_to_other_tasks() {
+    /*
     reset_task_watchdog();
 
     #[cfg(target_os = "espidf")]
@@ -107,11 +110,13 @@ pub async fn yield_to_other_tasks() {
 
     // #[cfg(not(target_os = "espidf"))]
     // std::thread::sleep(std::time::Duration::from_micros(100));
+    */
     timer::sleep_millis(1).await;
 }
 
 /// Safely register current task with Task Watchdog Timer
 pub fn register_task_with_wdt(task_name: &str) -> bool {
+    /*
     #[cfg(target_os = "espidf")]
     unsafe {
         let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
@@ -131,6 +136,7 @@ pub fn register_task_with_wdt(task_name: &str) -> bool {
     }
 
     #[cfg(not(target_os = "espidf"))]
+    */
     {
         log::info!("{}: WDT registration skipped (not ESP-IDF)", task_name);
         true
@@ -140,6 +146,7 @@ pub fn register_task_with_wdt(task_name: &str) -> bool {
 /// Safely unregister current task from Task Watchdog Timer
 #[allow(dead_code)]
 pub fn unregister_task_from_wdt(task_name: &str) {
+    /*
     #[cfg(target_os = "espidf")]
     unsafe {
         let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
@@ -157,6 +164,7 @@ pub fn unregister_task_from_wdt(task_name: &str) {
     }
 
     #[cfg(not(target_os = "espidf"))]
+    */
     {
         log::info!("{}: WDT unregistration skipped (not ESP-IDF)", task_name);
     }
