@@ -360,15 +360,15 @@ async fn send_report_without_wifi() -> anyhow::Result<()> {
     const RETRY_DELAY_MS: u64 = 5000; // 5 seconds between retries
 
     for attempt in 1..=MAX_RETRIES {
-        info!("Attempting to send report (attempt {attempt}/{MAX_RETRIES})");
+        debug!("Attempting to send report (attempt {attempt}/{MAX_RETRIES})");
 
         match try_send_report().await {
             Ok(status) => {
-                info!("Report sent successfully with status: {status}");
+                debug!("Report sent successfully with status: {status}");
                 return Ok(());
             }
             Err(e) => {
-                warn!("Attempt {attempt} failed: {e:?}");
+                warn!("Attempt {attempt} failed: {e:?}. (attempt {attempt}/{MAX_RETRIES})");
                 if attempt < MAX_RETRIES {
                     info!("Retrying in {} seconds...", RETRY_DELAY_MS / 1000);
                     timer::sleep_millis(RETRY_DELAY_MS).await;
@@ -464,20 +464,20 @@ async fn try_send_report() -> anyhow::Result<u16> {
 
     let url = "https://hangulclock.homin.dev/v1/live-status";
     info!("Attempting to connect to {url}");
-    info!("Before client.request");
+    debug!("Before client.request");
 
     // Add network status check before making request
-    info!("Network status check - attempting to create HTTP request");
+    debug!("Network status check - attempting to create HTTP request");
     let mut request = client.request(Method::Post, url.as_ref(), &headers)?;
-    info!("After client.request - HTTP request created successfully");
+    debug!("After client.request - HTTP request created successfully");
 
-    info!("Sending report data");
+    debug!("Sending report data");
     let report_json = report::status_report().await?;
     request.write(report_json.as_bytes())?;
     request.flush()?;
 
-    info!("Waiting for response");
-    info!("Submitting HTTP request - this may take up to 30 seconds...");
+    debug!("Waiting for response");
+    debug!("Submitting HTTP request - this may take up to 30 seconds...");
     let response = request.submit()?;
     let status = response.status();
 

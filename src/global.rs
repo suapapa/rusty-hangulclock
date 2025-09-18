@@ -138,7 +138,7 @@ pub fn register_task_with_wdt(task_name: &str) -> bool {
     #[cfg(not(target_os = "espidf"))]
     */
     {
-        log::info!("{}: WDT registration skipped (not ESP-IDF)", task_name);
+        log::info!("{task_name}: WDT registration skipped (not ESP-IDF)");
         true
     }
 }
@@ -166,6 +166,6 @@ pub fn unregister_task_from_wdt(task_name: &str) {
     #[cfg(not(target_os = "espidf"))]
     */
     {
-        log::info!("{}: WDT unregistration skipped (not ESP-IDF)", task_name);
+        log::info!("{task_name}: WDT unregistration skipped (not ESP-IDF)");
     }
 }

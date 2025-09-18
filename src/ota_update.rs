@@ -4,7 +4,7 @@ use embedded_svc::http::client::Client;
 use embedded_svc::http::Method;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::ota::EspOta;
-use log::{debug, info};
+use log::{debug, info, warn};
 
 use crate::{global, net, timer};
 
@@ -66,17 +66,33 @@ pub async fn ota_update() -> anyhow::Result<()> {
         let spinner = ["-", "\\", "|", "/"];
         let mut spinner_index = 0;
         global::yield_to_other_tasks().await;
-        while let Ok(n) = response.read(&mut buf[..]) {
-            if n == 0 {
-                break;
-            }
-            debug!("Writing OTA data: {n}");
-            update.write(&buf[..n]).expect("write OTA data");
-            flashing_idx += 1;
-            if flashing_idx % 10 == 0 {
-                net::set_result_net(spinner[spinner_index]);
-                spinner_index = (spinner_index + 1) % spinner.len();
-                global::yield_to_other_tasks().await;
+
+        let mut read_retry_cnt = 0;
+        const READ_RETRY_CNT_MAX: u32 = 5;
+
+        loop {
+            match response.read(&mut buf[..]) {
+                Ok(n) => {
+                    if n == 0 {
+                        break;
+                    }
+                    read_retry_cnt = 0;
+                    debug!("Writing OTA data: {n}");
+                    update.write(&buf[..n]).expect("write OTA data");
+                    flashing_idx += 1;
+                    if flashing_idx % 10 == 0 {
+                        net::set_result_net(spinner[spinner_index]);
+                        spinner_index = (spinner_index + 1) % spinner.len();
+                        global::yield_to_other_tasks().await;
+                    }
+                }
+                Err(e) => {
+                    read_retry_cnt += 1;
+                    warn!("Failed to read OTA data: {e} (retry {read_retry_cnt}/{READ_RETRY_CNT_MAX})");
+                    if read_retry_cnt >= READ_RETRY_CNT_MAX {
+                        anyhow::bail!("Failed to read OTA data: {e}");
+                    }
+                }
             }
         }
         update.complete().expect("complete OTA");
