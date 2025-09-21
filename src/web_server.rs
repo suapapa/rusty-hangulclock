@@ -64,11 +64,15 @@ pub async fn start_web_server() -> anyhow::Result<()> {
                 if let Some((key, value)) = pair.split_once('=') {
                     match key.trim() {
                         "ssid" => {
-                            ssid = urlencoding::decode(value.trim()).unwrap_or_default().to_string();
+                            // First replace + with spaces, then URL decode
+                            let decoded_value = value.trim().replace('+', " ");
+                            ssid = urlencoding::decode(&decoded_value).unwrap_or_default().to_string();
                             info!("Parsed SSID: {} (length: {})", ssid, ssid.len());
                         }
                         "pass" => {
-                            pass = urlencoding::decode(value.trim()).unwrap_or_default().to_string();
+                            // First replace + with spaces, then URL decode
+                            let decoded_value = value.trim().replace('+', " ");
+                            pass = urlencoding::decode(&decoded_value).unwrap_or_default().to_string();
                             info!("Parsed password length: {}", pass.len());
                         }
                         _ => {}

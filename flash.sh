@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export NO=21
+export NO=14
 export HW_REVISION=4
 export SW_VERSION=24
 
