@@ -1,0 +1,20 @@
+# Cargo-deny configuration for rusty-hangulclock
+# This file configures dependency checking, licensing, and security policies
+
+[advisories]
+# Check for security vulnerabilities
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Allow yanked versions for now (common in embedded projects)
+yanked = "warn"
+
+[licenses]
+# Allow common open source licenses for embedded projects
+allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "CC0-1.0", "CC-BY-4.0", "CC-BY-3.0", "CC-BY-SA-3.0", "WTFPL", "Zlib", "Unlicense", "GPL-2.0", "GPL-3.0", "LGPL-2.1", "LGPL-3.0", "MPL-2.0", "CC-BY-SA-4.0"]
+# Confidence threshold for license detection
+confidence-threshold = 0.8
+
+# Specific license exceptions
+exceptions = [
+    # Add specific license exceptions here if needed
+]

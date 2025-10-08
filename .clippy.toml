@@ -1,0 +1,53 @@
+# Clippy configuration for rusty-hangulclock
+# Embedded Rust project linting preferences
+
+# Allow some common patterns in embedded code
+allowed-idents-below-min-chars = ["x", "y", "z", "i", "j", "k"]
+
+# Allow some common patterns in embedded code
+allowed-wildcard-imports = ["embedded_hal", "embedded_svc"]
+
+# Allow some common patterns in embedded code
+allow-dbg-in-tests = true
+
+# Allow some common patterns in embedded code
+allow-expect-in-tests = true
+
+# Allow some common patterns in embedded code
+allow-panic-in-tests = true
+
+# Allow some common patterns in embedded code
+allow-print-in-tests = true
+
+# Allow some common patterns in embedded code
+allow-unwrap-in-tests = true
+
+# Allow some common patterns in embedded code
+allow-useless-vec-in-tests = true
+
+# Allow some common patterns in embedded code
+allow-indexing-slicing-in-tests = true
+
+# Allow some common patterns in embedded code
+allow-comparison-to-zero = true
+
+# Allow some common patterns in embedded code
+allow-exact-repetitions = true
+
+# Allow some common patterns in embedded code
+allow-mixed-uninlined-format-args = true
+
+# Allow some common patterns in embedded code
+allow-one-hash-in-raw-strings = true
+
+# Allow some common patterns in embedded code
+allow-private-module-inception = true
+
+# Allow some common patterns in embedded code
+allow-renamed-params-for = ["embedded_hal", "embedded_svc"]
+
+# Allow some common patterns in embedded code
+allow-unwrap-in-consts = true
+
+# Allow some common patterns in embedded code
+allow-expect-in-consts = true
