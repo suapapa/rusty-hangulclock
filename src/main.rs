@@ -47,12 +47,6 @@ fn main() -> anyhow::Result<()> {
 
     info!("Hello, RustyHangulClock!");
 
-    // Register main task with Task Watchdog Timer
-    let _wdt_registered = global::register_task_with_wdt("main_task");
-    if !_wdt_registered {
-        warn!("Failed to register with TWDT - will run without watchdog protection");
-    }
-
     let p = Peripherals::take()?;
 
     let p_oled_sda = p.pins.gpio8;
@@ -142,6 +136,12 @@ fn main() -> anyhow::Result<()> {
     })?;
 
     info!("Starting tasks...");
+    // Register main task with Task Watchdog Timer
+    let _wdt_registered = global::register_task_with_wdt("main_task");
+    if !_wdt_registered {
+        warn!("Failed to register with TWDT - will run without watchdog protection");
+    }
+
     futures::executor::block_on(async {
         let net_task = net::net_loop(&mut wifi);
         let show_time_task = show_time_loop(&mut sleds);
@@ -149,26 +149,11 @@ fn main() -> anyhow::Result<()> {
         let time_sync_task = time_sync_loop();
         let rotary_encoder_task = rotary::rotary_encoder_loop(menu_r2, menu_r1);
 
-        // Start a watchdog reset task for the main thread
-        let watchdog_task = async {
-            let mut watchdog_counter = 0;
-            const WATCHDOG_INTERVAL: u32 = 500; // Reset every 5 seconds (100ms * 500)
-
-            loop {
-                timer::sleep_millis(100).await;
-                watchdog_counter += 1;
-
-                if watchdog_counter >= WATCHDOG_INTERVAL {
-                    debug!("Main task watchdog reset");
-                    global::reset_task_watchdog();
-                    watchdog_counter = 0;
-                }
-            }
-
-            // This will never be reached, but provides the return type
-            #[allow(unreachable_code)]
-            Ok::<(), anyhow::Error>(())
-        };
+        // Note: All *_loop() functions run as async tasks within a single FreeRTOS task
+        // (main). They are NOT separate FreeRTOS tasks, so
+        // reset_task_watchdog() resets the same main task's watchdog. Task
+        // Watchdog Timer is currently disabled (CONFIG_ESP_TASK_WDT=n),
+        // so WatchdogManager is used for cooperative multitasking and periodic yields.
 
         match futures::try_join!(
             menu_task,
@@ -176,7 +161,6 @@ fn main() -> anyhow::Result<()> {
             time_sync_task,
             show_time_task,
             rotary_encoder_task,
-            watchdog_task,
         ) {
             Ok(_) => info!("All tasks completed"),
             Err(e) => warn!("Error in task: {e:?}"),
@@ -194,40 +178,21 @@ async fn time_sync_loop() -> anyhow::Result<()> {
     let sync_check_interval_secs = 60; // 1 hour
     let mut sync_check_cnt = 0;
 
-    // Watchdog 카운터 추가
-    let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 60; // 60초마다 체크 (1초 * 60)
+    // Watchdog manager (60초마다 체크, 10회마다 yield)
+    let mut watchdog = global::WatchdogManager::new(60, 10);
 
     loop {
-        // Watchdog 체크
-        watchdog_counter += 1;
-        if watchdog_counter >= WATCHDOG_INTERVAL {
-            debug!("Time sync loop watchdog reset");
-            watchdog_counter = 0;
-            // Reset watchdog using global helper (only for registered tasks)
-            global::reset_task_watchdog();
-        }
-
         timer::sleep_secs(sync_check_interval_secs).await;
 
-        match net::get_net_cmd() {
-            Ok(cmd) => {
-                if !cmd.is_empty() {
-                    debug!("skip time sync loop due to net cmd: {cmd}");
-                    timer::sleep_millis(50).await;
-                    continue;
-                }
-            }
-            Err(e) => {
-                warn!("Failed to get net cmd: {e}");
-                timer::sleep_millis(50).await;
-                continue;
-            }
+        // Watchdog 체크 및 yield
+        if watchdog.update() {
+            global::yield_to_other_tasks().await;
         }
 
-        // Yield to other tasks periodically
-        if watchdog_counter % 10 == 0 {
-            global::yield_to_other_tasks().await;
+        // 네트워크 명령 체크
+        if net::check_net_cmd_or_skip().await.is_err() {
+            timer::sleep_millis(50).await;
+            continue;
         }
 
         // Every 24 hours
@@ -293,40 +258,21 @@ where
     let mut last_h: u8 = 0;
     let mut last_m: u8 = 0;
 
-    // Watchdog 카운터 추가
-    let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 60; // 60초마다 체크 (1초 * 60)
+    // Watchdog manager (60초마다 체크, 10회마다 yield)
+    let mut watchdog = global::WatchdogManager::new(60, 10);
 
     let utc_offset: i32 = nvs::get_utc_offset()?;
 
     loop {
-        // Watchdog 체크
-        watchdog_counter += 1;
-        if watchdog_counter >= WATCHDOG_INTERVAL {
-            debug!("Show time loop watchdog reset");
-            watchdog_counter = 0;
-            // Reset watchdog using global helper (only for registered tasks)
-            global::reset_task_watchdog();
-        }
-
-        // Yield to other tasks periodically
-        if watchdog_counter % 10 == 0 {
+        // Watchdog 체크 및 yield
+        if watchdog.update() {
             global::yield_to_other_tasks().await;
         }
 
-        match net::get_net_cmd() {
-            Ok(cmd) => {
-                if !cmd.is_empty() {
-                    debug!("skip show time loop due to net cmd: {cmd}");
-                    timer::sleep_secs(1).await;
-                    continue;
-                }
-            }
-            Err(e) => {
-                warn!("Failed to get net cmd: {e}");
-                timer::sleep_secs(1).await;
-                continue;
-            }
+        // 네트워크 명령 체크
+        if net::check_net_cmd_or_skip().await.is_err() {
+            timer::sleep_secs(1).await;
+            continue;
         }
 
         match global::IN_MENU.try_lock() {

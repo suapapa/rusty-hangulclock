@@ -2,13 +2,17 @@
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
 
 # Task watchdog configuration to prevent timeouts
-CONFIG_ESP_TASK_WDT=n
+# Set CONFIG_ESP_TASK_WDT=y to enable watchdog (will reboot on timeout)
+# Set CONFIG_ESP_TASK_WDT_PANIC=y to reboot, =n to only log
+CONFIG_ESP_TASK_WDT=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=120
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
 
 # Additional watchdog settings for long-running tasks
-CONFIG_ESP_TASK_WDT_PANIC=n
+# When PANIC=y, device will reboot if registered task doesn't reset watchdog in time
+# When PANIC=n, only logs warning (default behavior)
+CONFIG_ESP_TASK_WDT_PANIC=y
 CONFIG_ESP_TASK_WDT_USE_ESP_TIMER=y
 
 # Use this to set FreeRTOS kernel tick frequency to 1000 Hz (100 Hz by default).

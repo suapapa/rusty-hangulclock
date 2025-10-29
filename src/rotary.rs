@@ -1,5 +1,5 @@
 use embassy_time::{Duration, Ticker};
-use log::{debug, info, warn};
+use log::{info, warn};
 use rotary_encoder_hal::{Direction, Rotary};
 
 use crate::{global, net};
@@ -17,36 +17,18 @@ pub async fn rotary_encoder_loop(
     let mut debounce_count = 0;
     const DEBOUNCE_THRESHOLD: u8 = 3; // Reduced threshold
 
-    // Watchdog 카운터 추가
-    let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 1000; // 10ms * 1000 = 10초마다 체크
+    // Watchdog manager (10ms * 1000 = 10초마다 체크, 100회마다 yield)
+    let mut watchdog = global::WatchdogManager::new(1000, 100);
 
     loop {
-        match net::get_net_cmd() {
-            Ok(cmd) => {
-                if !cmd.is_empty() {
-                    debug!("skip rotary encoder loop due to net cmd: {cmd}");
-                    ticker.next().await;
-                    continue;
-                }
-            }
-            Err(e) => {
-                warn!("Failed to get net cmd: {e}");
-                ticker.next().await;
-                continue;
-            }
+        // 네트워크 명령 체크
+        if net::check_net_cmd_or_skip().await.is_err() {
+            ticker.next().await;
+            continue;
         }
 
-        // Watchdog 체크
-        watchdog_counter += 1;
-        if watchdog_counter >= WATCHDOG_INTERVAL {
-            debug!("Rotary encoder loop watchdog reset");
-            watchdog_counter = 0;
-            global::reset_task_watchdog();
-        }
-
-        // Yield to other tasks periodically
-        if watchdog_counter % 100 == 0 {
+        // Watchdog 체크 및 yield
+        if watchdog.update() {
             global::yield_to_other_tasks().await;
         }
 

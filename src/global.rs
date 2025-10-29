@@ -78,45 +78,39 @@ pub fn get_hw_revision() -> i32 {
         .unwrap_or_default()
 }
 
-/// Reset the task watchdog timer to prevent timeouts
-/// Only call this from tasks that are registered with TWDT
+/// Reset the task watchdog timer to prevent timeouts.
+/// Note: In the current architecture, all async loops run within the same
+/// FreeRTOS task (main), so this resets the main task's watchdog timer. Only
+/// effective if CONFIG_ESP_TASK_WDT=y. Optimized for single-core ESP32C3
 pub fn reset_task_watchdog() {
-    /*
     #[cfg(target_os = "espidf")]
     unsafe {
-        // Only reset if current task is registered with TWDT
-        let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
-        if !task_handle.is_null() {
-            // Try to reset, but don't panic on error
-            let result = esp_idf_svc::sys::esp_task_wdt_reset();
-            if result != 0 {
-                // Task not found or not registered - this is expected for some
-                // tasks Don't log as error to avoid spam
-            }
+        // Single-core: directly reset without checking task handle for better
+        // performance Only reset if current task is registered with TWDT
+        let result = esp_idf_svc::sys::esp_task_wdt_reset();
+        if result != 0 {
+            // Task not found or not registered - this is expected for some
+            // tasks Don't log as error to avoid spam
         }
     }
-    */
 }
 
 /// Yield control to other tasks briefly
+/// Optimized for single-core ESP32C3: uses async sleep to yield to other async
+/// futures
 pub async fn yield_to_other_tasks() {
-    /*
     reset_task_watchdog();
 
-    #[cfg(target_os = "espidf")]
-    unsafe {
-        esp_idf_svc::sys::vTaskDelay(1);
-    }
-
-    // #[cfg(not(target_os = "espidf"))]
-    // std::thread::sleep(std::time::Duration::from_micros(100));
-    */
+    // Use async sleep for both ESP-IDF and non-ESP-IDF to properly yield to other
+    // async futures. vTaskDelay() is synchronous and doesn't create an await point
+    // that allows the async runtime to switch between futures.
     timer::sleep_millis(1).await;
 }
 
 /// Safely register current task with Task Watchdog Timer
+/// Returns true if registration succeeded or is not applicable
+/// Note: Only effective when CONFIG_ESP_TASK_WDT=y
 pub fn register_task_with_wdt(task_name: &str) -> bool {
-    /*
     #[cfg(target_os = "espidf")]
     unsafe {
         let task_handle = esp_idf_svc::sys::xTaskGetCurrentTaskHandle();
@@ -136,7 +130,6 @@ pub fn register_task_with_wdt(task_name: &str) -> bool {
     }
 
     #[cfg(not(target_os = "espidf"))]
-    */
     {
         log::info!("{task_name}: WDT registration skipped (not ESP-IDF)");
         true
@@ -167,5 +160,45 @@ pub fn unregister_task_from_wdt(task_name: &str) {
     */
     {
         log::info!("{task_name}: WDT unregistration skipped (not ESP-IDF)");
+    }
+}
+
+/// Watchdog manager helper to reduce code duplication
+pub struct WatchdogManager {
+    counter: u32,
+    interval: u32,
+    yield_interval: u32,
+}
+
+impl WatchdogManager {
+    /// Create a new WatchdogManager with specified intervals
+    pub fn new(watchdog_interval: u32, yield_interval: u32) -> Self {
+        Self {
+            counter: 0,
+            interval: watchdog_interval,
+            yield_interval,
+        }
+    }
+
+    /// Update watchdog counter and reset if needed. Returns true if yield is
+    /// recommended.
+    pub fn update(&mut self) -> bool {
+        // Watchdog 체크 - 오버플로우 방지를 위해 비교 후 증가
+        if self.counter >= self.interval {
+            log::debug!("Watchdog reset");
+            self.counter = 0; // 명시적 리셋
+            reset_task_watchdog();
+        } else {
+            self.counter += 1;
+        }
+
+        // Yield 권장 여부 반환
+        self.yield_interval > 0 && self.counter % self.yield_interval == 0
+    }
+
+    /// Reset the counter manually
+    #[allow(dead_code)]
+    pub fn reset(&mut self) {
+        self.counter = 0;
     }
 }

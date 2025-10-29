@@ -34,9 +34,8 @@ pub async fn net_loop(
 
     let mut ap_mode = false;
     let mut ota_mode = false;
-    // Watchdog 카운터 추가
-    let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 100; // 100ms * 100 = 10초마다 체크
+    // Watchdog manager (100ms * 100 = 10초마다 체크, 10회마다 yield)
+    let mut watchdog = global::WatchdogManager::new(100, 10);
 
     // let mut auto_time_sync_check_cnt = 0; // 24 hours 마다 수행
     // const AUTO_TIME_SYNC_CHECK_INTERVAL: u32 = 10 * 60 * 60 * 24; // 24 hours
@@ -48,16 +47,8 @@ pub async fn net_loop(
             continue;
         }
 
-        // Watchdog 체크
-        watchdog_counter += 1;
-        if watchdog_counter >= WATCHDOG_INTERVAL {
-            debug!("Net loop watchdog reset");
-            watchdog_counter = 0;
-            global::reset_task_watchdog();
-        }
-
-        // Yield to other tasks periodically
-        if watchdog_counter % 10 == 0 {
+        // Watchdog 체크 및 yield
+        if watchdog.update() {
             global::yield_to_other_tasks().await;
         }
 
@@ -310,9 +301,12 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
 }
 
 async fn sync_time_without_wifi() -> anyhow::Result<bool> {
-    let last_time_synced = {
-        let last_time_synced = global::TIME_SYNCED.lock().unwrap();
-        *last_time_synced
+    let last_time_synced = match global::TIME_SYNCED.try_lock() {
+        Ok(time_synced) => *time_synced,
+        Err(_) => {
+            warn!("Failed to lock TIME_SYNCED, assuming not synced");
+            false
+        }
     };
 
     let sntp_conf = sntp::SntpConf {
@@ -323,35 +317,71 @@ async fn sync_time_without_wifi() -> anyhow::Result<bool> {
 
     let sntp = sntp::EspSntp::new(&sntp_conf).expect("Failed to create SNTP");
     let mut retry = 5;
+    const MAX_WAIT_TIME_SECS: u32 = 30; // 각 재시도마다 최대 30초 대기
+
     loop {
         retry -= 1;
         if retry == 0 {
-            return Err(anyhow::anyhow!("Failed to sync time"));
+            return Err(anyhow::anyhow!("Failed to sync time after all retries"));
         }
-        info!("Waiting for SNTP sync...");
-        match sntp.get_sync_status() {
-            sntp::SyncStatus::Completed => {
-                info!("SNTP synced");
-                if !last_time_synced {
-                    info!("Setting initial time_synced");
-                    let mut time_synced = global::TIME_SYNCED.lock().unwrap();
-                    *time_synced = true;
+
+        info!("Waiting for SNTP sync... (retries left: {retry})");
+        let mut wait_count = 0u32; // 각 재시도마다 새로 시작
+
+        // 각 재시도마다 최대 30초까지 대기
+        loop {
+            wait_count += 1;
+            if wait_count >= MAX_WAIT_TIME_SECS {
+                warn!(
+                    "SNTP sync timeout after {} seconds, retrying...",
+                    MAX_WAIT_TIME_SECS
+                );
+                break; // 외부 루프의 continue로 재시도
+            }
+
+            match sntp.get_sync_status() {
+                sntp::SyncStatus::Completed => {
+                    info!("SNTP synced");
+                    if !last_time_synced {
+                        info!("Setting initial time_synced");
+                        match global::TIME_SYNCED.try_lock() {
+                            Ok(mut time_synced) => {
+                                *time_synced = true;
+                            }
+                            Err(_) => {
+                                warn!("Failed to lock TIME_SYNCED");
+                            }
+                        }
+                    }
+                    return Ok(true);
                 }
-                return Ok(true);
-            }
-            sntp::SyncStatus::Reset => {
-                warn!("SNTP reset");
-                global::yield_to_other_tasks().await;
-                timer::sleep_secs(3).await;
-                continue;
-            }
-            sntp::SyncStatus::InProgress => {
-                info!("SNTP in progress");
-                global::yield_to_other_tasks().await;
-                timer::sleep_secs(3).await;
-                continue;
+                sntp::SyncStatus::Reset => {
+                    if wait_count % 10 == 0 {
+                        info!(
+                            "SNTP reset, waiting... ({}/{} secs)",
+                            wait_count, MAX_WAIT_TIME_SECS
+                        );
+                    }
+                    global::yield_to_other_tasks().await;
+                    timer::sleep_secs(1).await; // 1초마다 체크
+                    continue;
+                }
+                sntp::SyncStatus::InProgress => {
+                    if wait_count % 10 == 0 {
+                        info!(
+                            "SNTP in progress, waiting... ({}/{} secs)",
+                            wait_count, MAX_WAIT_TIME_SECS
+                        );
+                    }
+                    global::yield_to_other_tasks().await;
+                    timer::sleep_secs(1).await; // 1초마다 체크
+                    continue;
+                }
             }
         }
+
+        // 타임아웃 후 재시도 전 짧은 대기
+        timer::sleep_secs(2).await;
     }
 }
 
@@ -599,6 +629,24 @@ pub fn get_result_net() -> String {
         Err(_) => {
             warn!("Failed to get RESULT_NET");
             "".to_string()
+        }
+    }
+}
+
+/// Check if there's a network command in progress and skip if needed.
+/// Returns Ok(()) if should continue, or Err with skip reason
+pub async fn check_net_cmd_or_skip() -> Result<(), &'static str> {
+    match get_net_cmd() {
+        Ok(cmd) => {
+            if !cmd.is_empty() {
+                debug!("Skipping due to net cmd: {cmd}");
+                return Err("net_cmd_in_progress");
+            }
+            Ok(())
+        }
+        Err(e) => {
+            warn!("Failed to get net cmd: {e}");
+            Err("net_cmd_error")
         }
     }
 }

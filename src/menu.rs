@@ -2,7 +2,7 @@ use std::time;
 
 use esp_idf_svc::hal::i2c::*;
 use esp_idf_svc::hal::reset::restart;
-use log::{debug, info, warn};
+use log::{info, warn};
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
 
 use crate::{global, net, nvs, timer};
@@ -105,34 +105,35 @@ pub async fn menu_loop(
     let mut menu_enter_ts: u128 = get_ts();
     let mut sub_menu = false;
 
-    // Watchdog 카운터 추가
-    let mut watchdog_counter = 0;
-    const WATCHDOG_INTERVAL: u32 = 200; // 50ms * 200 = 10초마다 체크
+    // Watchdog manager (50ms * 200 = 10초마다 체크, 20회마다 yield)
+    let mut watchdog = global::WatchdogManager::new(200, 20);
 
     loop {
         timer::sleep_millis(50).await;
 
-        // Watchdog 체크
-        watchdog_counter += 1;
-        if watchdog_counter >= WATCHDOG_INTERVAL {
-            debug!("Menu loop watchdog reset");
-            watchdog_counter = 0;
-            global::reset_task_watchdog();
-        }
-
-        // Yield to other tasks periodically
-        if watchdog_counter % 20 == 0 {
+        // Watchdog 체크 및 yield
+        if watchdog.update() {
             global::yield_to_other_tasks().await;
         }
-        let in_menu = {
-            let in_menu = global::IN_MENU.lock().unwrap();
-            *in_menu
+        let in_menu = match global::IN_MENU.try_lock() {
+            Ok(in_menu) => *in_menu,
+            Err(_) => {
+                // 다른 태스크가 락을 잡고 있으면 잠시 대기 후 재시도
+                timer::sleep_millis(10).await;
+                continue;
+            }
         };
 
         if !in_menu {
             // let _read_guard = LED_WRITE_LOCK.read().unwrap();
-            let h = *global::CUR_H.lock().unwrap();
-            let m = *global::CUR_M.lock().unwrap();
+            let (h, m) = match (global::CUR_H.try_lock(), global::CUR_M.try_lock()) {
+                (Ok(h_guard), Ok(m_guard)) => (*h_guard, *m_guard),
+                _ => {
+                    // 락을 얻지 못하면 스킵하고 다음 루프로
+                    timer::sleep_millis(10).await;
+                    continue;
+                }
+            };
             let time_str = format!("{h:02}:{m:02}");
             let sw_ver_str = format!("sw-v{}", global::get_sw_version());
 
@@ -145,9 +146,15 @@ pub async fn menu_loop(
                     global::RotaryEvent::Clockwise | global::RotaryEvent::CounterClockwise => {
                         *event = global::RotaryEvent::None;
                         info!("enter menu");
-                        {
-                            let mut in_menu = global::IN_MENU.lock().unwrap();
-                            *in_menu = true;
+                        match global::IN_MENU.try_lock() {
+                            Ok(mut in_menu) => {
+                                *in_menu = true;
+                            }
+                            Err(_) => {
+                                warn!("Failed to lock IN_MENU");
+                                timer::sleep_millis(10).await;
+                                continue;
+                            }
                         }
                         current_menu = MenuOption::Ota;
                         sub_menu = false;
@@ -159,9 +166,13 @@ pub async fn menu_loop(
         } else {
             let ts_now = get_ts();
             if (ts_now - menu_enter_ts) > 60 * 1000 {
-                {
-                    let mut in_menu = global::IN_MENU.lock().unwrap();
-                    *in_menu = false;
+                match global::IN_MENU.try_lock() {
+                    Ok(mut in_menu) => {
+                        *in_menu = false;
+                    }
+                    Err(_) => {
+                        warn!("Failed to unlock IN_MENU on timeout");
+                    }
                 }
                 info!("exit menu");
                 continue;
@@ -170,10 +181,34 @@ pub async fn menu_loop(
             // let _read_guard = LED_WRITE_LOCK.read().unwrap();
             if sub_menu {
                 let mut value = match current_menu {
-                    MenuOption::LedHue => *global::LED_HUE.lock().unwrap() as i16,
-                    MenuOption::LedSat => *global::LED_SAT.lock().unwrap() as i16,
-                    MenuOption::LedVal => *global::LED_VAL.lock().unwrap() as i16,
-                    MenuOption::UtcOffset => *global::UTC_OFFSET.lock().unwrap() as i16,
+                    MenuOption::LedHue => match global::LED_HUE.try_lock() {
+                        Ok(hue) => *hue as i16,
+                        Err(_) => {
+                            warn!("Failed to lock LED_HUE");
+                            0
+                        }
+                    },
+                    MenuOption::LedSat => match global::LED_SAT.try_lock() {
+                        Ok(sat) => *sat as i16,
+                        Err(_) => {
+                            warn!("Failed to lock LED_SAT");
+                            0
+                        }
+                    },
+                    MenuOption::LedVal => match global::LED_VAL.try_lock() {
+                        Ok(val) => *val as i16,
+                        Err(_) => {
+                            warn!("Failed to lock LED_VAL");
+                            0
+                        }
+                    },
+                    MenuOption::UtcOffset => match global::UTC_OFFSET.try_lock() {
+                        Ok(offset) => *offset as i16,
+                        Err(_) => {
+                            warn!("Failed to lock UTC_OFFSET");
+                            0
+                        }
+                    },
                     _ => 0,
                 };
 
@@ -230,10 +265,34 @@ pub async fn menu_loop(
                     }
 
                     match current_menu {
-                        MenuOption::LedHue => *global::LED_HUE.lock().unwrap() = value as u8,
-                        MenuOption::LedSat => *global::LED_SAT.lock().unwrap() = value as u8,
-                        MenuOption::LedVal => *global::LED_VAL.lock().unwrap() = value as u8,
-                        MenuOption::UtcOffset => *global::UTC_OFFSET.lock().unwrap() = value as i8,
+                        MenuOption::LedHue => {
+                            if let Ok(mut hue) = global::LED_HUE.try_lock() {
+                                *hue = value as u8;
+                            } else {
+                                warn!("Failed to lock LED_HUE for update");
+                            }
+                        }
+                        MenuOption::LedSat => {
+                            if let Ok(mut sat) = global::LED_SAT.try_lock() {
+                                *sat = value as u8;
+                            } else {
+                                warn!("Failed to lock LED_SAT for update");
+                            }
+                        }
+                        MenuOption::LedVal => {
+                            if let Ok(mut val) = global::LED_VAL.try_lock() {
+                                *val = value as u8;
+                            } else {
+                                warn!("Failed to lock LED_VAL for update");
+                            }
+                        }
+                        MenuOption::UtcOffset => {
+                            if let Ok(mut offset) = global::UTC_OFFSET.try_lock() {
+                                *offset = value as i8;
+                            } else {
+                                warn!("Failed to lock UTC_OFFSET for update");
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -243,14 +302,28 @@ pub async fn menu_loop(
                     timer::sleep_millis(200).await;
                     match current_menu {
                         MenuOption::LedHue | MenuOption::LedSat | MenuOption::LedVal => {
-                            let hue = *global::LED_HUE.lock().unwrap();
-                            let sat = *global::LED_SAT.lock().unwrap();
-                            let val = *global::LED_VAL.lock().unwrap();
-                            nvs::set_hsv(hue, sat, val).unwrap();
+                            match (
+                                global::LED_HUE.try_lock(),
+                                global::LED_SAT.try_lock(),
+                                global::LED_VAL.try_lock(),
+                            ) {
+                                (Ok(hue), Ok(sat), Ok(val)) => {
+                                    nvs::set_hsv(*hue, *sat, *val).unwrap();
+                                }
+                                _ => {
+                                    warn!("Failed to lock LED values for NVS save");
+                                }
+                            }
                         }
                         MenuOption::UtcOffset => {
-                            let offset = *global::UTC_OFFSET.lock().unwrap();
-                            nvs::set_utc_offset(offset as i32).unwrap();
+                            match global::UTC_OFFSET.try_lock() {
+                                Ok(offset) => {
+                                    nvs::set_utc_offset(*offset as i32).unwrap();
+                                }
+                                Err(_) => {
+                                    warn!("Failed to lock UTC_OFFSET for NVS save");
+                                }
+                            }
 
                             timer::sleep_millis(1000).await;
                             esp_idf_svc::hal::reset::restart();
@@ -312,31 +385,16 @@ pub async fn menu_loop(
                                             ),
                                         )?;
 
-                                        loop {
-                                            timer::sleep_secs(1).await;
-
-                                            let result = net::get_result_net();
-                                            if result.as_str() == "OK" || result.as_str() == "NG" {
-                                                info!("NTP cmd completed");
-                                                draw_text(
-                                                    disp,
-                                                    &format!(
-                                                        "MENU {}/{}\n\nNTP\n**{}**",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                        result.as_str(),
-                                                    ),
-                                                )?;
-                                                net::set_result_net("");
-                                                timer::sleep_secs(1).await;
-                                                {
-                                                    let mut in_menu =
-                                                        global::IN_MENU.lock().unwrap();
-                                                    *in_menu = false;
-                                                }
-                                                break;
-                                            }
-                                        }
+                                        let _ = wait_for_net_result(
+                                            disp,
+                                            current_menu.index(),
+                                            menu_len,
+                                            "NTP",
+                                            60,
+                                            1000,
+                                            false,
+                                        )
+                                        .await;
                                     }
                                     MenuOption::ApMode => {
                                         info!("AP MODE selected");
@@ -385,31 +443,17 @@ pub async fn menu_loop(
                                                 menu_len,
                                             ),
                                         )?;
-                                        loop {
-                                            timer::sleep_secs(1).await;
 
-                                            let result = net::get_result_net();
-                                            if result.as_str() == "OK" || result.as_str() == "NG" {
-                                                info!("WPS cmd completed");
-                                                draw_text(
-                                                    disp,
-                                                    &format!(
-                                                        "MENU {}/{}\n\nWPS\n**{}**",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                        result.as_str(),
-                                                    ),
-                                                )?;
-                                                net::set_result_net("");
-                                                timer::sleep_secs(1).await;
-                                                {
-                                                    let mut in_menu =
-                                                        global::IN_MENU.lock().unwrap();
-                                                    *in_menu = false;
-                                                }
-                                                break;
-                                            }
-                                        }
+                                        let _ = wait_for_net_result(
+                                            disp,
+                                            current_menu.index(),
+                                            menu_len,
+                                            "WPS",
+                                            120,
+                                            1000,
+                                            false,
+                                        )
+                                        .await;
                                     }
                                     MenuOption::Ota => {
                                         info!("OTA selected");
@@ -426,41 +470,17 @@ pub async fn menu_loop(
                                                 menu_len,
                                             ),
                                         )?;
-                                        loop {
-                                            timer::sleep_millis(10).await;
 
-                                            let result = net::get_result_net();
-                                            if result.as_str() == "OK" || result.as_str() == "NG" {
-                                                info!("OTA cmd completed");
-                                                draw_text(
-                                                    disp,
-                                                    &format!(
-                                                        "MENU {}/{}\n\nOTA\n**{}**",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                        result.as_str(),
-                                                    ),
-                                                )?;
-                                                net::set_result_net("");
-                                                timer::sleep_secs(1).await;
-                                                {
-                                                    let mut in_menu =
-                                                        global::IN_MENU.lock().unwrap();
-                                                    *in_menu = false;
-                                                }
-                                                break;
-                                            } else if result.as_str() != "" {
-                                                draw_text(
-                                                    disp,
-                                                    &format!(
-                                                        "MENU {}/{}\n\nOTA\n\nFLASHING\n\n{}",
-                                                        current_menu.index() + 1,
-                                                        menu_len,
-                                                        result.as_str(),
-                                                    ),
-                                                )?;
-                                            }
-                                        }
+                                        let _ = wait_for_net_result(
+                                            disp,
+                                            current_menu.index(),
+                                            menu_len,
+                                            "OTA",
+                                            300,
+                                            10,
+                                            true,
+                                        )
+                                        .await;
                                     }
                                     MenuOption::LedHue
                                     | MenuOption::LedSat
@@ -486,9 +506,13 @@ pub async fn menu_loop(
                                             ),
                                         )?;
                                         timer::sleep_secs(1).await;
-                                        {
-                                            let mut in_menu = global::IN_MENU.lock().unwrap();
-                                            *in_menu = false;
+                                        match global::IN_MENU.try_lock() {
+                                            Ok(mut in_menu) => {
+                                                *in_menu = false;
+                                            }
+                                            Err(_) => {
+                                                warn!("Failed to unlock IN_MENU on exit");
+                                            }
                                         }
                                     }
                                 }
@@ -505,6 +529,91 @@ fn get_ts() -> u128 {
     let now = time::SystemTime::now();
 
     now.duration_since(time::UNIX_EPOCH).unwrap().as_millis()
+}
+
+/// Wait for network command result with timeout and optional flashing status
+/// updates
+async fn wait_for_net_result(
+    disp: &mut Sh1106GM<I2cInterface<I2cDriver<'_>>>,
+    menu_index: usize,
+    menu_len: usize,
+    menu_name: &str,
+    max_timeout_secs: u32,
+    sleep_interval_ms: u64,
+    show_flashing: bool,
+) -> anyhow::Result<String> {
+    let mut timeout_count = 0u32;
+    // Calculate max ticks: convert seconds to milliseconds, then divide by sleep
+    // interval
+    let max_timeout_ticks = (max_timeout_secs as u64 * 1000 / sleep_interval_ms) as u32;
+    let mut last_flashing_update = 0u32;
+
+    loop {
+        timer::sleep_millis(sleep_interval_ms).await;
+        timeout_count += 1;
+
+        if timeout_count >= max_timeout_ticks {
+            warn!("{menu_name} timeout after {} seconds", max_timeout_secs);
+            draw_text(
+                disp,
+                &format!(
+                    "MENU {}/{}\n\n{menu_name}\n**TIMEOUT**",
+                    menu_index + 1,
+                    menu_len,
+                ),
+            )?;
+            net::set_result_net("");
+            timer::sleep_secs(2).await;
+            match global::IN_MENU.try_lock() {
+                Ok(mut in_menu) => {
+                    *in_menu = false;
+                }
+                Err(_) => {
+                    warn!("Failed to unlock IN_MENU on timeout");
+                }
+            }
+            return Err(anyhow::anyhow!("{menu_name} timeout"));
+        }
+
+        let result = net::get_result_net();
+        let result_str = result.as_str();
+        if result_str == "OK" || result_str == "NG" {
+            info!("{menu_name} cmd completed");
+            draw_text(
+                disp,
+                &format!(
+                    "MENU {}/{}\n\n{menu_name}\n**{result_str}**",
+                    menu_index + 1,
+                    menu_len,
+                ),
+            )?;
+            net::set_result_net("");
+            timer::sleep_secs(1).await;
+            match global::IN_MENU.try_lock() {
+                Ok(mut in_menu) => {
+                    *in_menu = false;
+                }
+                Err(_) => {
+                    warn!("Failed to unlock IN_MENU");
+                }
+            }
+            return Ok(result_str.to_string());
+        } else if show_flashing && !result_str.is_empty() {
+            // FLASHING 상태 업데이트는 주기적으로만 (과도한 화면 업데이트 방지)
+            let flashing_update_interval = if sleep_interval_ms <= 100 { 100 } else { 10 };
+            if timeout_count - last_flashing_update >= flashing_update_interval {
+                draw_text(
+                    disp,
+                    &format!(
+                        "MENU {}/{}\n\n{menu_name}\n\nFLASHING\n\n{result_str}",
+                        menu_index + 1,
+                        menu_len,
+                    ),
+                )?;
+                last_flashing_update = timeout_count;
+            }
+        }
+    }
 }
 
 use std::sync::Mutex;
@@ -524,13 +633,26 @@ pub fn draw_text(disp: &mut Sh1106GM<I2cInterface<I2cDriver>>, text: &str) -> an
     // let _read_guard = LED_WRITE_LOCK.read().unwrap();
 
     // last_text와 다를 때만 출력
-    let mut last_text = LAST_TEXT.lock().unwrap();
-    if *last_text == text {
-        // 같으면 아무것도 하지 않음
+    let should_update = match LAST_TEXT.try_lock() {
+        Ok(mut last_text) => {
+            if *last_text == text {
+                // 같으면 아무것도 하지 않음
+                return Ok(());
+            }
+            // 다르면 업데이트
+            *last_text = text.to_string();
+            true
+        }
+        Err(_) => {
+            // 락을 얻지 못하면 일단 업데이트 수행 (중복 출력 방지는 포기)
+            warn!("Failed to lock LAST_TEXT, proceeding with update anyway");
+            true
+        }
+    };
+
+    if !should_update {
         return Ok(());
     }
-    // 다르면 업데이트
-    *last_text = text.to_string();
 
     let text_style = MonoTextStyleBuilder::new()
         .font(&FONT_6X13)
