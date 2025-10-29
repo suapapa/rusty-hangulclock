@@ -40,7 +40,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
     let connection = EspHttpConnection::new(&HttpConfiguration {
         use_global_ca_store: true,
         crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
-        timeout: Some(StdDuration::from_secs(30)), // Increased from 10s to 30s
+        timeout: Some(StdDuration::from_secs(300)), // 5 minutes for OTA download
         ..Default::default()
     })?;
     let mut client = Client::wrap(connection);
@@ -50,7 +50,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
         global::get_hw_revision(),
     );
 
-    info!("Creating HTTP request for update (may take up to 30s to connect)...");
+    info!("Creating HTTP request for update (timeout: 5 minutes)...");
     let request = client.request(Method::Get, url.as_ref(), &[])?;
     info!("HTTP request created, now submitting (connection phase)...");
     let mut response = request.submit()?;
@@ -63,26 +63,33 @@ pub async fn ota_update() -> anyhow::Result<()> {
         let mut update = ota.initiate_update().expect("initiate OTA");
         let mut buf = Box::new([0u8; 4096]);
         let mut flashing_idx = 0;
-        let spinner = ["-", "\\", "|", "/"];
-        let mut spinner_index = 0;
-        global::yield_to_other_tasks().await;
 
+        let total_bin_size = response
+            .header("Content-Length")
+            .unwrap_or("0")
+            .parse::<usize>()
+            .unwrap_or(0);
+        let mut total_flash_size = 0usize;
         let mut read_retry_cnt = 0;
         const READ_RETRY_CNT_MAX: u32 = 5;
 
+        debug!("Total bin size: {total_bin_size}");
         loop {
+            // global::yield_to_other_tasks().await;
             match response.read(&mut buf[..]) {
                 Ok(n) => {
                     if n == 0 {
                         break;
                     }
                     read_retry_cnt = 0;
-                    debug!("Writing OTA data: {n}");
                     update.write(&buf[..n]).expect("write OTA data");
+                    total_flash_size += n;
+
                     flashing_idx += 1;
-                    if flashing_idx % 10 == 0 {
-                        net::set_result_net(spinner[spinner_index]);
-                        spinner_index = (spinner_index + 1) % spinner.len();
+                    if flashing_idx % 100 == 0 {
+                        let progress = (total_flash_size * 100) / total_bin_size;
+                        // info!("Progress: {progress}%");
+                        net::set_result_net(&format!("{progress}%"));
                         global::yield_to_other_tasks().await;
                     }
                 }
@@ -96,6 +103,8 @@ pub async fn ota_update() -> anyhow::Result<()> {
             }
         }
         update.complete().expect("complete OTA");
+        net::set_result_net("OK");
+        timer::sleep_secs(1).await;
         info!("Update complete, rebooting...");
         esp_idf_svc::hal::reset::restart();
         // Ok(())

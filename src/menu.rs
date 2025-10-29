@@ -582,7 +582,7 @@ async fn wait_for_net_result(
             draw_text(
                 disp,
                 &format!(
-                    "MENU {}/{}\n\n{menu_name}\n**{result_str}**",
+                    "MENU {}/{}\n\n{menu_name}\n\n**{result_str}**",
                     menu_index + 1,
                     menu_len,
                 ),

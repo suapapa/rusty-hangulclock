@@ -85,6 +85,8 @@ pub fn get_hw_revision() -> i32 {
 /// FreeRTOS task (main), so this resets the main task's watchdog timer. Only
 /// effective if CONFIG_ESP_TASK_WDT=y. Optimized for single-core ESP32C3
 pub fn reset_task_watchdog() {
+    // WDT is disabled
+    /*
     #[cfg(target_os = "espidf")]
     unsafe {
         // Single-core: directly reset without checking task handle for better
@@ -95,6 +97,7 @@ pub fn reset_task_watchdog() {
             // tasks Don't log as error to avoid spam
         }
     }
+    */
 }
 
 /// Yield control to other tasks briefly
