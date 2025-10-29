@@ -39,10 +39,44 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::log::EspLogger::initialize_default();
 
     // Set panic hook to restart device on panic
+    // Note: Skip restart if in AP_MODE or OTA_MODE to avoid interrupting network
+    // operations
     std::panic::set_hook(Box::new(|panic_info| {
-        log::error!("Panic occurred: {:#?}", panic_info);
-        log::error!("Restarting device...");
-        restart();
+        // Check if this is a task watchdog timeout
+        let panic_msg = format!("{:#?}", panic_info);
+        let is_wdt_timeout = panic_msg.contains("task_wdt")
+            || panic_msg.contains("Task watchdog")
+            || panic_msg.contains("watchdog")
+            || panic_info
+                .payload()
+                .downcast_ref::<&str>()
+                .map(|s| s.contains("task_wdt") || s.contains("watchdog"))
+                .unwrap_or(false);
+
+        if is_wdt_timeout {
+            log::error!("Task Watchdog Timer timeout detected!");
+            log::error!("A task failed to reset the watchdog within the timeout period");
+            log::error!("This usually indicates a task is stuck or not properly yielding");
+            log::error!("Check CONFIG_ESP_TASK_WDT_TIMEOUT_S for the configured timeout");
+            log::error!("Panic details: {:#?}", panic_info);
+        } else {
+            log::error!("Panic occurred: {:#?}", panic_info);
+        }
+
+        // Check if we're in AP_MODE or OTA_MODE
+        let in_special_mode = {
+            let ap_mode = global::AP_MODE.try_lock().map(|v| *v).unwrap_or(false);
+            let ota_mode = global::OTA_MODE.try_lock().map(|v| *v).unwrap_or(false);
+            ap_mode || ota_mode
+        };
+
+        if in_special_mode {
+            log::warn!("Panic in AP_MODE or OTA_MODE - skipping restart to allow network operations to complete");
+            log::warn!("Device will continue running (may be unstable)");
+        } else {
+            log::error!("Restarting device...");
+            restart();
+        }
     }));
 
     info!("Hello, RustyHangulClock!");
@@ -137,7 +171,7 @@ fn main() -> anyhow::Result<()> {
 
     info!("Starting tasks...");
     // Register main task with Task Watchdog Timer
-    let _wdt_registered = global::register_task_with_wdt("main_task");
+    let _wdt_registered = global::register_task_with_wdt("main");
     if !_wdt_registered {
         warn!("Failed to register with TWDT - will run without watchdog protection");
     }

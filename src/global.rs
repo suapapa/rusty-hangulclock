@@ -29,6 +29,8 @@ lazy_static! {
     pub static ref LED_VAL: Mutex<u8> = Mutex::new(255);
     pub static ref UTC_OFFSET: Mutex<i8> = Mutex::new(9); // Default to KST (UTC+9)
     pub static ref BOOT_TIME: Mutex<u128> = Mutex::new(0);
+    pub static ref AP_MODE: Mutex<bool> = Mutex::new(false);
+    pub static ref OTA_MODE: Mutex<bool> = Mutex::new(false);
 }
 
 pub fn get_uptime() -> u128 {

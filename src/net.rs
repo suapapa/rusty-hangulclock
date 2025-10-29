@@ -32,34 +32,16 @@ pub async fn net_loop(
         warn!("Failed to send NTP cmd");
     }
 
-    let mut ap_mode = false;
-    let mut ota_mode = false;
     // Watchdog manager (100ms * 100 = 10초마다 체크, 10회마다 yield)
     let mut watchdog = global::WatchdogManager::new(100, 10);
 
-    // let mut auto_time_sync_check_cnt = 0; // 24 hours 마다 수행
-    // const AUTO_TIME_SYNC_CHECK_INTERVAL: u32 = 10 * 60 * 60 * 24; // 24 hours
-
     loop {
         timer::sleep_millis(100).await;
-
-        if ap_mode || ota_mode {
-            continue;
-        }
 
         // Watchdog 체크 및 yield
         if watchdog.update() {
             global::yield_to_other_tasks().await;
         }
-
-        // auto_time_sync_check_cnt += 1;
-        // if auto_time_sync_check_cnt >= AUTO_TIME_SYNC_CHECK_INTERVAL {
-        //     info!("Auto time sync check");
-        //     auto_time_sync_check_cnt = 0;
-        //     if !set_net_cmd("NTP") {
-        //         warn!("Failed to send NTP cmd");
-        //     }
-        // }
 
         match get_net_cmd() {
             Ok(cmd) => {
@@ -70,7 +52,10 @@ pub async fn net_loop(
                         Ok(_) => {
                             info!("AP cmd completed");
                             set_result_net("OK");
-                            ap_mode = true;
+                            // 전역 상태 업데이트
+                            if let Ok(mut ap_mode_global) = global::AP_MODE.try_lock() {
+                                *ap_mode_global = true;
+                            }
                         }
                         Err(e) => {
                             warn!("Failed to connect to wifi with ap: {e:?}");
@@ -111,16 +96,25 @@ pub async fn net_loop(
                 }
                 if cmd == "OTA" {
                     info!("Received OTA command");
-                    ota_mode = true;
+                    // 전역 상태 업데이트
+                    if let Ok(mut ota_mode_global) = global::OTA_MODE.try_lock() {
+                        *ota_mode_global = true;
+                    }
                     set_result_net("");
                     match ota_update_with_wifi(wifi).await {
                         Ok(_) => {
                             info!("OTA cmd completed");
                             set_result_net("OK");
+                            if let Ok(mut ota_mode_global) = global::OTA_MODE.try_lock() {
+                                *ota_mode_global = false;
+                            }
                         }
                         Err(e) => {
                             warn!("Failed to update: {e:?}");
                             set_result_net("NG");
+                            if let Ok(mut ota_mode_global) = global::OTA_MODE.try_lock() {
+                                *ota_mode_global = false;
+                            }
                         }
                     }
                     clear_net_cmd();

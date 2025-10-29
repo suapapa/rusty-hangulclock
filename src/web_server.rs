@@ -2,7 +2,7 @@ use esp_idf_svc::hal::io::EspIOError;
 use esp_idf_svc::http::server::{Configuration, EspHttpServer, Method};
 use log::{info, warn};
 
-use crate::timer;
+use crate::{global, timer};
 
 pub async fn start_web_server() -> anyhow::Result<()> {
     // Set the HTTP server
@@ -131,7 +131,15 @@ pub async fn start_web_server() -> anyhow::Result<()> {
 
     info!("Web server started");
 
+    // Watchdog manager (1초 * 60 = 60초마다 체크, 10회마다 yield)
+    let mut watchdog = global::WatchdogManager::new(60, 10);
+
     loop {
+        // Watchdog 체크 및 yield
+        if watchdog.update() {
+            global::yield_to_other_tasks().await;
+        }
+
         // server.poll().await;
         timer::sleep_secs(1).await;
     }

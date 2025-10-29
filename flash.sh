@@ -2,7 +2,7 @@
 
 export NO=32
 export HW_REVISION=4
-export SW_VERSION=25
+export SW_VERSION=27
 
 # Default flash (to inactive partition)
 make -f Makefile_homin flash RUSTY_HANGULCLOCK_HW_REVISION=${HW_REVISION} RUSTY_HANGULCLOCK_SW_VERSION=${SW_VERSION} RUSTY_HANGULCLOCK_NO=${NO}

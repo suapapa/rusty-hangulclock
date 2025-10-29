@@ -6,13 +6,16 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
 # Set CONFIG_ESP_TASK_WDT_PANIC=y to reboot, =n to only log
 CONFIG_ESP_TASK_WDT=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=120
-CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
-CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=y
+# Disable idle task watchdog check - single-core ESP32-C3 with async executor
+# keeps CPU busy, preventing idle task from running
+# Main task watchdog (120s timeout) is still active to catch stuck tasks
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
 
 # Additional watchdog settings for long-running tasks
 # When PANIC=y, device will reboot if registered task doesn't reset watchdog in time
 # When PANIC=n, only logs warning (default behavior)
-CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_PANIC=n
 CONFIG_ESP_TASK_WDT_USE_ESP_TIMER=y
 
 # Use this to set FreeRTOS kernel tick frequency to 1000 Hz (100 Hz by default).
