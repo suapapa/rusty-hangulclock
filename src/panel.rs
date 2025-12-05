@@ -12,7 +12,7 @@ use smart_leds::{gamma, SmartLedsWrite, RGB8};
 #[cfg(feature = "neopixel")]
 use ws2812_spi::Ws2812;
 
-use crate::{global, nvs, timer};
+use crate::{global, net, nvs, timer};
 
 const LED_NUM: usize = 25;
 // const DEFAULT_BRIGHTNESS: u8 = 100;
@@ -165,6 +165,17 @@ impl<SPI: SpiBus> Sleds<SPI> {
 
     fn show_leds(&mut self, leds: Vec<u8>) {
         // let leds = remap(leds);
+        match net::get_net_cmd() {
+            Ok(cmd) => {
+                if !cmd.is_empty() {
+                    log::warn!("busy for net cmd: {cmd:?}. skip show_leds()");
+                    return;
+                }
+            }
+            Err(e) => {
+                log::warn!("get_net_cmd error: {e:?}");
+            }
+        }
 
         let led_hsv = Hsv {
             hue: *global::LED_HUE.lock().unwrap(),
