@@ -198,10 +198,9 @@ impl<SPI: SpiBus> Sleds<SPI> {
         // Apply gamma correction outside critical section
         let gamma_data = gamma(data.iter().cloned());
 
+        let mut sleds_guards = self.sleds.lock().unwrap();
         interrupt::free(|| {
-            if let Err(e) = self.sleds.lock().unwrap().write(gamma_data) {
-                log::warn!("LED write error: {e:?}");
-            }
+            let _ = sleds_guards.write(gamma_data);
         });
 
         // Use global helper functions for better task management
