@@ -38,6 +38,3 @@ tasks/
 *.env.example
 ref/
 release/
-
-flash.sh
-make_ota_bins.sh
