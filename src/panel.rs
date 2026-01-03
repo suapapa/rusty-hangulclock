@@ -198,10 +198,16 @@ impl<SPI: SpiBus> Sleds<SPI> {
         // Apply gamma correction outside critical section
         let gamma_data = gamma(data.iter().cloned());
 
-        let mut sleds_guards = self.sleds.lock().unwrap();
-        interrupt::free(|| {
-            let _ = sleds_guards.write(gamma_data);
-        });
+        match self.sleds.lock() {
+            Ok(mut sleds) => {
+                interrupt::free(|| {
+                    let _ = sleds.write(gamma_data);
+                });
+            }
+            Err(e) => {
+                log::error!("sleds lock error: {e:?}");
+            }
+        }
 
         // Use global helper functions for better task management
         task::block_on(async {

@@ -43,7 +43,7 @@ fn main() -> anyhow::Result<()> {
     // operations
     std::panic::set_hook(Box::new(|panic_info| {
         // Check if this is a task watchdog timeout
-        let panic_msg = format!("{:#?}", panic_info);
+        let panic_msg = format!("{panic_info:#?}");
         let is_wdt_timeout = panic_msg.contains("task_wdt")
             || panic_msg.contains("Task watchdog")
             || panic_msg.contains("watchdog")
@@ -58,9 +58,9 @@ fn main() -> anyhow::Result<()> {
             log::error!("A task failed to reset the watchdog within the timeout period");
             log::error!("This usually indicates a task is stuck or not properly yielding");
             log::error!("Check CONFIG_ESP_TASK_WDT_TIMEOUT_S for the configured timeout");
-            log::error!("Panic details: {:#?}", panic_info);
+            log::error!("Panic details: {panic_info:#?}");
         } else {
-            log::error!("Panic occurred: {:#?}", panic_info);
+            log::error!("Panic occurred: {panic_info:#?}");
         }
 
         // Check if we're in AP_MODE or OTA_MODE
@@ -133,9 +133,10 @@ fn main() -> anyhow::Result<()> {
     menu::draw_text(
         &mut disp,
         &format!(
-            "Rusty\nHangul\nClock\nrev{}\nno.{}\n\ninit\n...",
+            "Rusty\nHangul\nClock\nrev.{}\n\nno.{}\nver.{}\n\ninit...",
             global::get_hw_revision(),
-            nvs::get_device_no()?
+            nvs::get_device_no()?,
+            global::get_sw_version()
         ),
     )?;
 
@@ -229,9 +230,9 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             continue;
         }
 
-        // Every 24 hours
+        // Every 3 days
         sync_check_cnt += 1;
-        if sync_check_cnt >= 60 * 24 {
+        if sync_check_cnt >= 60 * 24 * 3 {
             sync_check_cnt = 0;
         }
 

@@ -326,10 +326,7 @@ async fn sync_time_without_wifi() -> anyhow::Result<bool> {
         loop {
             wait_count += 1;
             if wait_count >= MAX_WAIT_TIME_SECS {
-                warn!(
-                    "SNTP sync timeout after {} seconds, retrying...",
-                    MAX_WAIT_TIME_SECS
-                );
+                warn!("SNTP sync timeout after {MAX_WAIT_TIME_SECS} seconds, retrying...");
                 break; // 외부 루프의 continue로 재시도
             }
 
@@ -351,10 +348,7 @@ async fn sync_time_without_wifi() -> anyhow::Result<bool> {
                 }
                 sntp::SyncStatus::Reset => {
                     if wait_count % 10 == 0 {
-                        info!(
-                            "SNTP reset, waiting... ({}/{} secs)",
-                            wait_count, MAX_WAIT_TIME_SECS
-                        );
+                        info!("SNTP reset, waiting... ({wait_count}/{MAX_WAIT_TIME_SECS} secs)");
                     }
                     global::yield_to_other_tasks().await;
                     timer::sleep_secs(1).await; // 1초마다 체크
@@ -363,8 +357,7 @@ async fn sync_time_without_wifi() -> anyhow::Result<bool> {
                 sntp::SyncStatus::InProgress => {
                     if wait_count % 10 == 0 {
                         info!(
-                            "SNTP in progress, waiting... ({}/{} secs)",
-                            wait_count, MAX_WAIT_TIME_SECS
+                            "SNTP in progress, waiting... ({wait_count}/{MAX_WAIT_TIME_SECS} secs)"
                         );
                     }
                     global::yield_to_other_tasks().await;

@@ -16,6 +16,7 @@ pub async fn status_report() -> anyhow::Result<String> {
         "no": nvs::get_device_no()?,
         "sw_version": global::get_sw_version(),
         "boot_count": boot_count,
+        "owner": nvs::get_owner()?,
     });
 
     info!("Report: {report_json}");

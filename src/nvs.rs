@@ -333,3 +333,38 @@ pub fn get_device_no() -> anyhow::Result<String> {
 fn get_device_no_from_env() -> &'static str {
     option_env!("RUSTY_HANGULCLOCK_NO").unwrap_or_default()
 }
+
+pub fn get_owner() -> anyhow::Result<String> {
+    let nvs_default_partition: EspNvsPartition<NvsCustom> =
+        EspCustomNvsPartition::take("user_nvs")?;
+
+    let ns = "owner_ns";
+    let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+        Ok(nvs) => {
+            info!("Got namespace {ns:?} from default partition");
+            nvs
+        }
+        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
+    };
+
+    const MAX_STR_LEN: usize = 100;
+    let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
+    let owner = match nvs.get_str("owner", &mut buffer) {
+        Ok(Some(v)) => v.to_string(),
+        _ => {
+            let env_owner = get_owner_from_env();
+            if !env_owner.is_empty() {
+                nvs.set_str("owner", env_owner)?;
+                env_owner.to_string()
+            } else {
+                "".to_string()
+            }
+        }
+    };
+
+    Ok(owner)
+}
+
+fn get_owner_from_env() -> &'static str {
+    option_env!("RUSTY_HANGULCLOCK_OWNER").unwrap_or_default()
+}

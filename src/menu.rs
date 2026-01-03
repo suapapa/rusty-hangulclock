@@ -107,9 +107,30 @@ pub async fn menu_loop(
 
     // Watchdog manager (50ms * 200 = 10초마다 체크, 20회마다 yield)
     let mut watchdog = global::WatchdogManager::new(200, 20);
+    let owner_str = match nvs::get_owner() {
+        Ok(owner) => {
+            if owner.is_empty() {
+                String::new()
+            } else {
+                format!("\n\nfor\n{}", owner)
+            }
+        }
+        Err(_) => String::new(),
+    };
 
     loop {
         timer::sleep_millis(50).await;
+        match net::get_net_cmd() {
+            Ok(cmd) => {
+                if !cmd.is_empty() {
+                    //log::warn!("busy for net cmd: {cmd:?}. skip menu loop");
+                    continue;
+                }
+            }
+            Err(e) => {
+                log::warn!("get_net_cmd error: {e:?}");
+            }
+        }
 
         // Watchdog 체크 및 yield
         if watchdog.update() {
@@ -119,7 +140,6 @@ pub async fn menu_loop(
             Ok(in_menu) => *in_menu,
             Err(_) => {
                 // 다른 태스크가 락을 잡고 있으면 잠시 대기 후 재시도
-                timer::sleep_millis(10).await;
                 continue;
             }
         };
@@ -130,16 +150,13 @@ pub async fn menu_loop(
                 (Ok(h_guard), Ok(m_guard)) => (*h_guard, *m_guard),
                 _ => {
                     // 락을 얻지 못하면 스킵하고 다음 루프로
-                    timer::sleep_millis(10).await;
                     continue;
                 }
             };
             let time_str = format!("{h:02}:{m:02}");
-            let sw_ver_str = format!("sw-v{}", global::get_sw_version());
-
             draw_text(
                 disp,
-                &format!("Rusty\nHangul\nClock\n{sw_ver_str}\n\n{time_str}\n\nrotate\nknob"),
+                &format!("Rusty\nHangul\nClock{owner_str}\n\n{time_str}"),
             )?;
             if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
                 match *event {
@@ -152,7 +169,6 @@ pub async fn menu_loop(
                             }
                             Err(_) => {
                                 warn!("Failed to lock IN_MENU");
-                                timer::sleep_millis(10).await;
                                 continue;
                             }
                         }
@@ -553,7 +569,7 @@ async fn wait_for_net_result(
         timeout_count += 1;
 
         if timeout_count >= max_timeout_ticks {
-            warn!("{menu_name} timeout after {} seconds", max_timeout_secs);
+            warn!("{menu_name} timeout after {max_timeout_secs} seconds");
             draw_text(
                 disp,
                 &format!(
