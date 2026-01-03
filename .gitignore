@@ -40,4 +40,4 @@ ref/
 release/
 
 Makefile_homin
-flash_rev3.sh
+flash.sh
