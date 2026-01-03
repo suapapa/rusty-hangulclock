@@ -39,5 +39,5 @@ tasks/
 ref/
 release/
 
-Makefile_homin
 flash.sh
+make_ota_bins.sh
