@@ -279,7 +279,7 @@ async fn time_sync_loop() -> anyhow::Result<()> {
 
 async fn inc_boot_count() -> anyhow::Result<()> {
     let boot_count = nvs::get_boot_count()?;
-    nvs::set_boot_count(boot_count + 1)?;
+    nvs::set_boot_count(boot_count.saturating_add(1))?;
     Ok(())
 }
 

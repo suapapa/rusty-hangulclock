@@ -87,7 +87,11 @@ pub async fn ota_update() -> anyhow::Result<()> {
 
                     flashing_idx += 1;
                     if flashing_idx % 100 == 0 {
-                        let progress = (total_flash_size * 100) / total_bin_size;
+                        let progress = if total_bin_size > 0 {
+                            (total_flash_size as u64 * 100 / total_bin_size as u64) as usize
+                        } else {
+                            0
+                        };
                         // info!("Progress: {progress}%");
                         net::set_result_net(&format!("{progress}%"));
                         global::yield_to_other_tasks().await;
