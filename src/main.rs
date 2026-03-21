@@ -210,8 +210,8 @@ fn main() -> anyhow::Result<()> {
 async fn time_sync_loop() -> anyhow::Result<()> {
     info!("Starting time_sync_loop()...");
 
-    let sync_check_interval_secs = 60; // 1 hour
-    let mut sync_check_cnt = 0;
+    let sync_check_interval_secs: u64 = 60; // 1 hour
+    let mut sync_check_cnt: u64 = 0;
 
     // Watchdog manager (60초마다 체크, 10회마다 yield)
     let mut watchdog = global::WatchdogManager::new(60, 10);

@@ -3,7 +3,7 @@
 # Defaults
 # NO=26
 # HW_REVISION=4
-SW_VERSION=""
+SW_VERSION="" # 33
 TARGET="ota_bin"
 
 while getopts "n:r:v:a:o:" opt; do

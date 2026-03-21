@@ -148,7 +148,10 @@ pub async fn connect_ap(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resul
     wifi.start().await?;
     info!("Wifi started");
 
-    wifi.wait_netif_up().await?;
+    match embassy_time::with_timeout(embassy_time::Duration::from_secs(30), wifi.wait_netif_up()).await {
+        Ok(res) => res?,
+        Err(_) => return Err(anyhow::anyhow!("wifi.wait_netif_up() timed out")),
+    }
     info!("Wifi netif up");
 
     web_server::start_web_server().await?;
@@ -257,11 +260,8 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     };
 
     info!("Starting SNTP and send report...");
-    wifi.connect().await?;
-    info!("Wifi connected");
-
-    wifi.wait_netif_up().await?;
-    info!("Wifi netif up");
+    connect_wifi_with_timeout(wifi).await?;
+    info!("Wifi connected and netif up");
 
     // // Add delay to ensure network is fully initialized
     // timer::sleep_secs(3).await; // Increased from 2s to 3s
@@ -427,11 +427,8 @@ pub async fn sync_time_and_send_report(
 
     unsafe { esp_wifi_set_max_tx_power(34) };
 
-    wifi.connect().await?;
-    info!("Wifi connected");
-
-    wifi.wait_netif_up().await?;
-    info!("Wifi netif up");
+    connect_wifi_with_timeout(wifi).await?;
+    info!("Wifi connected and netif up");
 
     // // Add delay to ensure network is fully initialized
     // timer::sleep_secs(3).await; // Increased from 2s to 3s
@@ -528,11 +525,8 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
 
     unsafe { esp_wifi_set_max_tx_power(34) };
 
-    wifi.connect().await?;
-    info!("Wifi connected");
-
-    wifi.wait_netif_up().await?;
-    info!("Wifi netif up");
+    connect_wifi_with_timeout(wifi).await?;
+    info!("Wifi connected and netif up");
 
     // // Add delay to ensure network is fully initialized
     // timer::sleep_secs(3).await; // Increased from 2s to 3s
@@ -637,3 +631,16 @@ pub async fn check_net_cmd_or_skip() -> Result<(), &'static str> {
         }
     }
 }
+
+async fn connect_wifi_with_timeout(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    match embassy_time::with_timeout(embassy_time::Duration::from_secs(30), wifi.connect()).await {
+        Ok(res) => res?,
+        Err(_) => return Err(anyhow::anyhow!("wifi.connect() timed out")),
+    }
+    match embassy_time::with_timeout(embassy_time::Duration::from_secs(30), wifi.wait_netif_up()).await {
+        Ok(res) => res?,
+        Err(_) => return Err(anyhow::anyhow!("wifi.wait_netif_up() timed out")),
+    }
+    Ok(())
+}
+
