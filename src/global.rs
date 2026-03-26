@@ -80,7 +80,7 @@ pub async fn yield_to_other_tasks() {
 
 /// Safely register current task with Task Watchdog Timer
 /// Returns true if registration succeeded or is not applicable
-pub fn register_task_with_wdt(task_name: &str) -> bool {
+pub fn register_task_with_wdt(_task_name: &str) -> bool {
     // TWDT was never initialized, so we can't reset it.
     /*
     #[cfg(target_os = "espidf")]
@@ -115,7 +115,7 @@ pub fn register_task_with_wdt(task_name: &str) -> bool {
 
 /// Safely unregister current task from Task Watchdog Timer
 #[allow(dead_code)]
-pub fn unregister_task_from_wdt(task_name: &str) {
+pub fn unregister_task_from_wdt(_task_name: &str) {
     // TWDT was never initialized, so we can't reset it.
     /*
     #[cfg(target_os = "espidf")]

@@ -9,7 +9,7 @@ use esp_idf_svc::hal::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::sntp;
 use esp_idf_svc::wifi::{AsyncWifi, EspWifi, WpsConfig, WpsFactoryInfo, WpsStatus, WpsType};
-use log::{debug, info, warn};
+use log::{info, warn};
 
 use crate::{global, nvs, ota_update, report, timer, web_server};
 
@@ -33,15 +33,15 @@ impl NetCmd {
         }
     }
 
-    fn as_str(&self) -> &'static str {
-        match self {
-            NetCmd::Ap => "AP",
-            NetCmd::Wps => "WPS",
-            NetCmd::Ntp => "NTP",
-            NetCmd::Ota => "OTA",
-            NetCmd::None => "",
-        }
-    }
+    // fn as_str(&self) -> &'static str {
+    //     match self {
+    //         NetCmd::Ap => "AP",
+    //         NetCmd::Wps => "WPS",
+    //         NetCmd::Ntp => "NTP",
+    //         NetCmd::Ota => "OTA",
+    //         NetCmd::None => "",
+    //     }
+    // }
 }
 
 pub async fn net_loop(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<()> {

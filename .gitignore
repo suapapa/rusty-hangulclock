@@ -38,3 +38,6 @@ tasks/
 *.env.example
 ref/
 release/
+
+.agents/
+skills-lock.json

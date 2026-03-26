@@ -118,7 +118,8 @@ fn main() -> anyhow::Result<()> {
 
     info!("Restarting...");
     restart();
-    Ok(())
+
+    // Ok(())
 }
 
 fn setup_panic_hook() {

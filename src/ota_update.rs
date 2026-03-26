@@ -4,7 +4,7 @@ use embedded_svc::http::client::Client;
 use embedded_svc::http::Method;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::ota::EspOta;
-use log::{debug, info, warn};
+use log::info;
 
 use crate::{global, net, timer};
 
@@ -23,7 +23,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
         info!("Ping attempt {}: connecting to {}", attempt, PING_URL);
         let connection = EspHttpConnection::new(&http_config)?;
         let mut client = Client::wrap(connection);
-        
+
         if let Ok(request) = client.request(Method::Get, PING_URL, &[]) {
             if let Ok(response) = request.submit() {
                 if response.status() == 200 {
@@ -63,20 +63,25 @@ pub async fn ota_update() -> anyhow::Result<()> {
     info!("Applying update...");
     let mut ota = EspOta::new()?;
     let mut update = ota.initiate_update()?;
-    
+
     let mut buf = [0u8; 4096];
     let mut total_downloaded = 0usize;
-    let total_size = response.header("Content-Length")
+    let total_size = response
+        .header("Content-Length")
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(0);
 
     let mut watchdog = global::WatchdogManager::new(100, 10);
 
     loop {
-        if watchdog.update() { global::yield_to_other_tasks().await; }
+        if watchdog.update() {
+            global::yield_to_other_tasks().await;
+        }
 
         let n = response.read(&mut buf)?;
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
 
         update.write(&buf[..n])?;
         total_downloaded += n;
@@ -93,5 +98,5 @@ pub async fn ota_update() -> anyhow::Result<()> {
     info!("Update complete, rebooting...");
     timer::sleep_secs(2).await;
     esp_idf_svc::hal::reset::restart();
-    Ok(())
+    // Ok(())
 }

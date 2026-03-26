@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use apa102_spi::Apa102;
 use embedded_hal::spi::SpiBus;
 use esp_idf_svc::hal::interrupt;
-use log::{error, info, warn};
+use log::{info, warn};
 use smart_leds::hsv::{hsv2rgb, Hsv};
 use smart_leds::{gamma, SmartLedsWrite, RGB8};
 #[cfg(feature = "neopixel")]
@@ -48,7 +48,7 @@ impl<SPI: SpiBus> Sleds<SPI> {
             });
             data[i] = color;
             hue = (hue + 256 / LED_NUM as u16) % 256;
-            
+
             if let Ok(mut sleds) = self.sleds.lock() {
                 let _ = sleds.write(gamma(data.iter().cloned()));
             }
@@ -74,9 +74,15 @@ impl<SPI: SpiBus> Sleds<SPI> {
         // load default hsv
         if let Ok((hue, sat, val)) = nvs::get_hsv() {
             info!("Loaded HSV: hue={}, sat={}, val={}", hue, sat, val);
-            if let Ok(mut h) = global::LED_HUE.lock() { *h = hue; }
-            if let Ok(mut s) = global::LED_SAT.lock() { *s = sat; }
-            if let Ok(mut v) = global::LED_VAL.lock() { *v = val; }
+            if let Ok(mut h) = global::LED_HUE.lock() {
+                *h = hue;
+            }
+            if let Ok(mut s) = global::LED_SAT.lock() {
+                *s = sat;
+            }
+            if let Ok(mut v) = global::LED_VAL.lock() {
+                *v = val;
+            }
         }
 
         self.turn_on_all().await;
@@ -113,8 +119,14 @@ impl<SPI: SpiBus> Sleds<SPI> {
                 active_mask |= (1 << 16) | (1 << 21);
             }
         } else {
-            let h12 = if h > 12 { h - 12 } else if h == 0 { 12 } else { h };
-            
+            let h12 = if h > 12 {
+                h - 12
+            } else if h == 0 {
+                12
+            } else {
+                h
+            };
+
             // 시 (Hour)
             match h12 {
                 12 => active_mask |= (1 << 0) | (1 << 5) | (1 << 14), // 열두시
@@ -135,7 +147,7 @@ impl<SPI: SpiBus> Sleds<SPI> {
             // 분 (Minute)
             if m10 > 0 || m1 > 0 {
                 match m10 {
-                    1 => active_mask |= 1 << 22,          // 십
+                    1 => active_mask |= 1 << 22,               // 십
                     2 => active_mask |= (1 << 17) | (1 << 19), // 이십
                     3 => active_mask |= (1 << 18) | (1 << 19), // 삼십
                     4 => active_mask |= (1 << 20) | (1 << 22), // 사십

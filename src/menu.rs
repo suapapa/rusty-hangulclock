@@ -2,7 +2,7 @@ use std::time;
 
 use esp_idf_svc::hal::i2c::*;
 use esp_idf_svc::hal::reset::restart;
-use log::{info, warn};
+use log::info;
 use sh1106::prelude::{GraphicsMode as Sh1106GM, I2cInterface};
 
 use crate::{global, net, nvs, timer};
@@ -93,8 +93,9 @@ pub async fn menu_loop(
     let mut menu_enter_ts = get_ts();
     let mut sub_menu = false;
     let mut watchdog = global::WatchdogManager::new(200, 20);
-    
-    let owner_str = nvs::get_owner().ok()
+
+    let owner_str = nvs::get_owner()
+        .ok()
         .filter(|o| !o.is_empty())
         .map(|o| format!("\n\nfor\n{}", o))
         .unwrap_or_default();
@@ -115,7 +116,10 @@ pub async fn menu_loop(
         if !in_menu {
             let h = *global::CUR_H.lock().unwrap();
             let m = *global::CUR_M.lock().unwrap();
-            draw_text(disp, &format!("Rusty\nHangul\nClock{}\n\n{:02}:{:02}", owner_str, h, m))?;
+            draw_text(
+                disp,
+                &format!("Rusty\nHangul\nClock{}\n\n{:02}:{:02}", owner_str, h, m),
+            )?;
 
             if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
                 if *event != global::RotaryEvent::None {
@@ -136,9 +140,24 @@ pub async fn menu_loop(
             }
 
             if sub_menu {
-                handle_sub_menu(disp, &mut current_menu, &mut sub_menu, &mut menu_enter_ts, &mut p_sel).await?;
+                handle_sub_menu(
+                    disp,
+                    &mut current_menu,
+                    &mut sub_menu,
+                    &mut menu_enter_ts,
+                    &mut p_sel,
+                )
+                .await?;
             } else {
-                handle_main_menu(disp, &mut current_menu, &mut sub_menu, &mut menu_enter_ts, &mut p_sel, menu_len).await?;
+                handle_main_menu(
+                    disp,
+                    &mut current_menu,
+                    &mut sub_menu,
+                    &mut menu_enter_ts,
+                    &mut p_sel,
+                    menu_len,
+                )
+                .await?;
             }
         }
     }
@@ -152,7 +171,15 @@ async fn handle_main_menu(
     p_sel: &mut impl embedded_hal::digital::InputPin,
     menu_len: usize,
 ) -> anyhow::Result<()> {
-    draw_text(disp, &format!("=MENU {}/{}=\n\n{}\n\npress\nto\ndecide", current_menu.index() + 1, menu_len, current_menu.as_str()))?;
+    draw_text(
+        disp,
+        &format!(
+            "=MENU {}/{}=\n\n{}\n\npress\nto\ndecide",
+            current_menu.index() + 1,
+            menu_len,
+            current_menu.as_str()
+        ),
+    )?;
 
     if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
         match *event {
@@ -176,15 +203,27 @@ async fn handle_main_menu(
                 *global::IN_MENU.lock().unwrap() = false;
                 timer::sleep_secs(1).await;
             }
-            MenuOption::LedHue | MenuOption::LedSat | MenuOption::LedVal | MenuOption::UtcOffset => {
+            MenuOption::LedHue
+            | MenuOption::LedSat
+            | MenuOption::LedVal
+            | MenuOption::UtcOffset => {
                 *sub_menu = true;
                 timer::sleep_millis(200).await;
             }
             _ => {
                 let cmd = current_menu.as_str();
                 if net::set_net_cmd(cmd) {
-                    draw_text(disp, &format!("MENU {}/{}\n\n**{}**\n\nwait...", current_menu.index() + 1, menu_len, cmd))?;
-                    let _ = wait_for_net_result(disp, current_menu.index(), menu_len, cmd, 60).await;
+                    draw_text(
+                        disp,
+                        &format!(
+                            "MENU {}/{}\n\n**{}**\n\nwait...",
+                            current_menu.index() + 1,
+                            menu_len,
+                            cmd
+                        ),
+                    )?;
+                    let _ =
+                        wait_for_net_result(disp, current_menu.index(), menu_len, cmd, 60).await;
                 }
             }
         }
@@ -207,7 +246,14 @@ async fn handle_sub_menu(
         _ => 0,
     };
 
-    draw_text(disp, &format!("={}=\n\n{}\n\npress\nto\ndecide", current_menu.as_str(), value))?;
+    draw_text(
+        disp,
+        &format!(
+            "={}=\n\n{}\n\npress\nto\ndecide",
+            current_menu.as_str(),
+            value
+        ),
+    )?;
 
     if let Ok(mut event) = global::ROTARY_EVENT.try_lock() {
         let step = match current_menu {
@@ -217,11 +263,19 @@ async fn handle_sub_menu(
 
         match *event {
             global::RotaryEvent::Clockwise => {
-                value = (value + step).min(if matches!(current_menu, MenuOption::UtcOffset) { 12 } else { 255 });
+                value = (value + step).min(if matches!(current_menu, MenuOption::UtcOffset) {
+                    12
+                } else {
+                    255
+                });
                 *menu_enter_ts = get_ts();
             }
             global::RotaryEvent::CounterClockwise => {
-                value = (value - step).max(if matches!(current_menu, MenuOption::UtcOffset) { -12 } else { 0 });
+                value = (value - step).max(if matches!(current_menu, MenuOption::UtcOffset) {
+                    -12
+                } else {
+                    0
+                });
                 *menu_enter_ts = get_ts();
             }
             _ => {}
@@ -262,7 +316,10 @@ async fn handle_sub_menu(
 }
 
 fn get_ts() -> u128 {
-    time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_millis()
+    time::SystemTime::now()
+        .duration_since(time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
 }
 
 async fn wait_for_net_result(
@@ -277,9 +334,17 @@ async fn wait_for_net_result(
 
     loop {
         timer::sleep_millis(500).await;
-        
+
         if get_ts().saturating_sub(start) > timeout_ms {
-            draw_text(disp, &format!("MENU {}/{}\n\n{}\n**TIMEOUT**", menu_index + 1, menu_len, menu_name))?;
+            draw_text(
+                disp,
+                &format!(
+                    "MENU {}/{}\n\n{}\n**TIMEOUT**",
+                    menu_index + 1,
+                    menu_len,
+                    menu_name
+                ),
+            )?;
             timer::sleep_secs(2).await;
             *global::IN_MENU.lock().unwrap() = false;
             return Err(anyhow::anyhow!("Timeout"));
@@ -287,29 +352,50 @@ async fn wait_for_net_result(
 
         let result = net::get_result_net();
         if result == "OK" || result == "NG" {
-            draw_text(disp, &format!("MENU {}/{}\n\n{}\n\n**{}**", menu_index + 1, menu_len, menu_name, result))?;
+            draw_text(
+                disp,
+                &format!(
+                    "MENU {}/{}\n\n{}\n\n**{}**",
+                    menu_index + 1,
+                    menu_len,
+                    menu_name,
+                    result
+                ),
+            )?;
             timer::sleep_secs(1).await;
             *global::IN_MENU.lock().unwrap() = false;
             return Ok(result);
         } else if !result.is_empty() {
-             draw_text(disp, &format!("MENU {}/{}\n\n{}\n\n{}", menu_index + 1, menu_len, menu_name, result))?;
+            draw_text(
+                disp,
+                &format!(
+                    "MENU {}/{}\n\n{}\n\n{}",
+                    menu_index + 1,
+                    menu_len,
+                    menu_name,
+                    result
+                ),
+            )?;
         }
     }
 }
 
 pub fn draw_text(disp: &mut Sh1106GM<I2cInterface<I2cDriver>>, text: &str) -> anyhow::Result<()> {
+    use std::sync::Mutex;
+
     use embedded_graphics::mono_font::ascii::FONT_6X13;
     use embedded_graphics::mono_font::MonoTextStyleBuilder;
     use embedded_graphics::pixelcolor::BinaryColor;
     use embedded_graphics::prelude::*;
     use embedded_graphics::text::{Alignment, Text};
     use once_cell::sync::Lazy;
-    use std::sync::Mutex;
 
     static LAST_TEXT: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
 
     if let Ok(mut last) = LAST_TEXT.try_lock() {
-        if *last == text { return Ok(()); }
+        if *last == text {
+            return Ok(());
+        }
         *last = text.to_string();
     }
 

@@ -1,5 +1,5 @@
 use esp_idf_svc::nvs::*;
-use log::{debug, info, warn};
+use log::info;
 
 fn get_nvs(namespace: &str, read_only: bool) -> anyhow::Result<EspNvs<NvsCustom>> {
     let partition = EspCustomNvsPartition::take("user_nvs")?;
