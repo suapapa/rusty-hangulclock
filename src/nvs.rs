@@ -6,7 +6,7 @@ pub fn set_wifi_cred(ssid: &str, pass: &str) -> anyhow::Result<()> {
         EspCustomNvsPartition::take("user_nvs")?;
 
     let ns = "cred_ns";
-    let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
             info!("Got namespace {ns:?} from default partition");
             nvs
@@ -217,7 +217,7 @@ pub fn get_device_id() -> anyhow::Result<String> {
         EspCustomNvsPartition::take("user_nvs")?;
 
     let ns = "device_id_ns";
-    let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
             info!("Got namespace {ns:?} from default partition");
             nvs
@@ -304,7 +304,7 @@ pub fn get_device_no() -> anyhow::Result<String> {
         EspCustomNvsPartition::take("user_nvs")?;
 
     let ns = "device_no_ns";
-    let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
             info!("Got namespace {ns:?} from default partition");
             nvs
@@ -339,7 +339,7 @@ pub fn get_owner() -> anyhow::Result<String> {
         EspCustomNvsPartition::take("user_nvs")?;
 
     let ns = "owner_ns";
-    let mut nvs = match EspNvs::new(nvs_default_partition, ns, true) {
+    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
         Ok(nvs) => {
             info!("Got namespace {ns:?} from default partition");
             nvs

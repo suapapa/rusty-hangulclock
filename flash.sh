@@ -3,7 +3,7 @@
 # Defaults
 NO=26
 HW_REVISION=4
-SW_VERSION=32
+SW_VERSION=33
 TARGET="flash"
 OWNER=""
 

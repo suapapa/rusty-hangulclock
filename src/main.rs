@@ -20,10 +20,10 @@ use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::gpio::*;
 use esp_idf_svc::hal::i2c::*;
 use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_svc::hal::prelude::*;
 use esp_idf_svc::hal::reset::restart;
 use esp_idf_svc::hal::spi::config::{Config as SpiConfig, DriverConfig as SpiDriverConfig};
 use esp_idf_svc::hal::spi::{SpiBusDriver, SpiDriver};
+use esp_idf_svc::hal::units::*;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 // use esp_idf_svc::sys::{esp_task_wdt_add, esp_task_wdt_delete, xTaskGetCurrentTaskHandle};
 use esp_idf_svc::timer::EspTaskTimerService;
@@ -93,13 +93,10 @@ fn main() -> anyhow::Result<()> {
     let p_menu_r2 = p.pins.gpio1;
     let p_menu_sel = p.pins.gpio3;
 
-    let mut menu_sel = PinDriver::input(p_menu_sel)?;
-    menu_sel.set_pull(Pull::Up)?;
+    let menu_sel = PinDriver::input(p_menu_sel, Pull::Up)?;
 
-    let mut menu_r1 = PinDriver::input(p_menu_r1)?;
-    menu_r1.set_pull(Pull::Up)?;
-    let mut menu_r2 = PinDriver::input(p_menu_r2)?;
-    menu_r2.set_pull(Pull::Up)?;
+    let menu_r1 = PinDriver::input(p_menu_r1, Pull::Up)?;
+    let menu_r2 = PinDriver::input(p_menu_r2, Pull::Up)?;
 
     // reset oled display
     // let mut disp_res = PinDriver::output(p_oled_res)?;
@@ -107,7 +104,7 @@ fn main() -> anyhow::Result<()> {
     // timer::sleep_millis(100);
     // disp_res.set_high().unwrap();
 
-    let i2c_config = I2cConfig::new().baudrate(50.kHz().into());
+    let i2c_config = I2cConfig::new().baudrate(50_u32.kHz().into());
     let i2c = I2cDriver::new(
         p.i2c0,
         p_oled_sda, // SDA
@@ -151,7 +148,7 @@ fn main() -> anyhow::Result<()> {
         &spi_driver_config,
     )?;
     let spi_config = SpiConfig::new()
-        .baudrate(3200.kHz().into()) // 2M ~ 3.8M
+        .baudrate(3200_u32.kHz().into()) // 2M ~ 3.8M
         .data_mode(SPI_MODE);
     let spi_bus = SpiBusDriver::new(&mut spi_driver, &spi_config)?;
     let mut sleds = panel::Sleds::new(spi_bus);

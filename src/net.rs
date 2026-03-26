@@ -148,7 +148,9 @@ pub async fn connect_ap(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resul
     wifi.start().await?;
     info!("Wifi started");
 
-    match embassy_time::with_timeout(embassy_time::Duration::from_secs(30), wifi.wait_netif_up()).await {
+    match embassy_time::with_timeout(embassy_time::Duration::from_secs(30), wifi.wait_netif_up())
+        .await
+    {
         Ok(res) => res?,
         Err(_) => return Err(anyhow::anyhow!("wifi.wait_netif_up() timed out")),
     }
@@ -637,10 +639,11 @@ async fn connect_wifi_with_timeout(wifi: &mut AsyncWifi<EspWifi<'static>>) -> an
         Ok(res) => res?,
         Err(_) => return Err(anyhow::anyhow!("wifi.connect() timed out")),
     }
-    match embassy_time::with_timeout(embassy_time::Duration::from_secs(30), wifi.wait_netif_up()).await {
+    match embassy_time::with_timeout(embassy_time::Duration::from_secs(30), wifi.wait_netif_up())
+        .await
+    {
         Ok(res) => res?,
         Err(_) => return Err(anyhow::anyhow!("wifi.wait_netif_up() timed out")),
     }
     Ok(())
 }
-
