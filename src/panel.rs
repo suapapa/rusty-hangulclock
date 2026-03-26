@@ -3,21 +3,16 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "dotstar")]
 use apa102_spi::Apa102;
 use embedded_hal::spi::SpiBus;
-// use once_cell::sync::Lazy;
 use esp_idf_svc::hal::interrupt;
-use esp_idf_svc::hal::task;
-use log::info;
+use log::{error, info, warn};
 use smart_leds::hsv::{hsv2rgb, Hsv};
 use smart_leds::{gamma, SmartLedsWrite, RGB8};
 #[cfg(feature = "neopixel")]
 use ws2812_spi::Ws2812;
 
-use crate::{global, net, nvs, timer};
+use crate::{global, net, nvs};
 
-const LED_NUM: usize = 25;
-// const DEFAULT_BRIGHTNESS: u8 = 100;
-
-// pub static LED_WRITE_LOCK: Lazy<RwLock<()>> = Lazy::new(|| RwLock::new(()));
+pub const LED_NUM: usize = 25;
 
 #[cfg(feature = "dotstar")]
 pub struct Sleds<SPI> {
@@ -30,10 +25,7 @@ pub struct Sleds<SPI> {
 }
 
 impl<SPI: SpiBus> Sleds<SPI> {
-    pub fn new(spi_bus: SPI) -> Self
-    where
-        SPI: SpiBus,
-    {
+    pub fn new(spi_bus: SPI) -> Self {
         #[cfg(feature = "dotstar")]
         let sleds = Apa102::new(spi_bus);
 
@@ -45,184 +37,163 @@ impl<SPI: SpiBus> Sleds<SPI> {
         }
     }
 
-    pub fn welcome(&mut self) {
+    pub async fn welcome(&mut self) {
         let mut hue: u16 = 0;
         for i in 0..LED_NUM {
             let mut data = [RGB8::default(); LED_NUM];
             let color = hsv2rgb(Hsv {
                 hue: hue as u8,
                 sat: 255,
-                val: 128, // 32,
+                val: 128,
             });
             data[i] = color;
             hue = (hue + 256 / LED_NUM as u16) % 256;
-            self.sleds
-                .lock()
-                .unwrap()
-                .write(gamma(data.iter().cloned()))
-                .unwrap();
-            task::block_on(async {
-                timer::sleep_millis(50).await;
-            });
+            
+            if let Ok(mut sleds) = self.sleds.lock() {
+                let _ = sleds.write(gamma(data.iter().cloned()));
+            }
+            crate::timer::sleep_millis(50).await;
         }
 
         let mut data = [RGB8::default(); LED_NUM];
-        for item in data.iter_mut().take(LED_NUM) {
+        for item in data.iter_mut() {
             let color = hsv2rgb(Hsv {
                 hue: hue as u8,
                 sat: 255,
-                val: 255, // 128
+                val: 255,
             });
             *item = color;
             hue = (hue + 256 / LED_NUM as u16) % 256;
         }
-        self.sleds
-            .lock()
-            .unwrap()
-            .write(gamma(data.iter().cloned()))
-            .unwrap();
-        task::block_on(async {
-            timer::sleep_millis(1000).await;
-        });
+
+        if let Ok(mut sleds) = self.sleds.lock() {
+            let _ = sleds.write(gamma(data.iter().cloned()));
+        }
+        crate::timer::sleep_millis(1000).await;
 
         // load default hsv
-        let (hue, sat, val) = nvs::get_hsv().unwrap();
-        info!("hue: {hue}, sat: {sat}, val: {val}");
-        *global::LED_HUE.lock().unwrap() = hue;
-        *global::LED_SAT.lock().unwrap() = sat;
-        *global::LED_VAL.lock().unwrap() = val;
+        if let Ok((hue, sat, val)) = nvs::get_hsv() {
+            info!("Loaded HSV: hue={}, sat={}, val={}", hue, sat, val);
+            if let Ok(mut h) = global::LED_HUE.lock() { *h = hue; }
+            if let Ok(mut s) = global::LED_SAT.lock() { *s = sat; }
+            if let Ok(mut v) = global::LED_VAL.lock() { *v = val; }
+        }
 
-        self.turn_on_all();
+        self.turn_on_all().await;
     }
 
-    pub fn show_time(&mut self, h: u8, m: u8) {
-        let mut h = h;
+    pub async fn show_time(&mut self, h: u8, m: u8) {
+        let mut h = h % 24;
         let mut m10 = m / 10;
         let mut m1 = m % 10;
+
+        // Round minutes to nearest 5
         match m1 {
-            1..=3 => m1 = 0,
-            4..=6 => m1 = 5,
-            7..=9 => {
+            1..=2 => m1 = 0,
+            3..=7 => m1 = 5,
+            8..=9 => {
                 m1 = 0;
                 m10 += 1;
                 if m10 == 6 {
                     m10 = 0;
-                    h += 1;
+                    h = (h + 1) % 24;
                 }
             }
             _ => (),
         }
 
-        if (h == 0 || h == 24) && m10 + m1 == 0 {
-            self.show_leds(vec![15, 16]); // 자정
-            return;
-        }
+        let mut active_mask = 0u32;
 
-        if h == 12 && m10 + m1 == 0 {
-            self.show_leds(vec![16, 21]); // 정오
-            return;
-        }
-
-        if h > 12 {
-            h -= 12;
-        }
-
-        let mut leds: Vec<u8> = vec![];
-
-        // start from bottom left
-        match h {
-            0 | 12 => leds.extend(vec![0, 5, 14]), // 열두시
-            1 => leds.extend(vec![1, 14]),         // 한시
-            2 => leds.extend(vec![5, 14]),         // 두시
-            3 => leds.extend(vec![3, 14]),         // 세시
-            4 => leds.extend(vec![4, 14]),         // 네시
-            5 => leds.extend(vec![2, 7, 14]),      // 다섯시
-            6 => leds.extend(vec![6, 7, 14]),      // 여섯시
-            7 => leds.extend(vec![8, 9, 14]),      // 일곱시
-            8 => leds.extend(vec![10, 11, 14]),    // 여덟시
-            9 => leds.extend(vec![12, 13, 14]),    // 아홉시
-            10 => leds.extend(vec![0, 14]),        // 열시
-            11 => leds.extend(vec![0, 1, 14]),     // 열한시
-            _ => (),
-        }
-        if m10 + m1 != 0 {
-            match m10 {
-                1 => leds.extend(vec![22]),     // 십
-                2 => leds.extend(vec![17, 19]), // 이십
-                3 => leds.extend(vec![18, 19]), // 삼십
-                4 => leds.extend(vec![20, 22]), // 사십
-                5 => leds.extend(vec![21, 22]), // 오십
+        if (h == 0 || h == 12) && m10 == 0 && m1 == 0 {
+            if h == 0 {
+                // 자정 (Indices 15, 16)
+                active_mask |= (1 << 15) | (1 << 16);
+            } else {
+                // 정오 (Indices 16, 21)
+                active_mask |= (1 << 16) | (1 << 21);
+            }
+        } else {
+            let h12 = if h > 12 { h - 12 } else if h == 0 { 12 } else { h };
+            
+            // 시 (Hour)
+            match h12 {
+                12 => active_mask |= (1 << 0) | (1 << 5) | (1 << 14), // 열두시
+                1 => active_mask |= (1 << 1) | (1 << 14),             // 한시
+                2 => active_mask |= (1 << 5) | (1 << 14),             // 두시
+                3 => active_mask |= (1 << 3) | (1 << 14),             // 세시
+                4 => active_mask |= (1 << 4) | (1 << 14),             // 네시
+                5 => active_mask |= (1 << 2) | (1 << 7) | (1 << 14),  // 다섯시
+                6 => active_mask |= (1 << 6) | (1 << 7) | (1 << 14),  // 여섯시
+                7 => active_mask |= (1 << 8) | (1 << 9) | (1 << 14),  // 일곱시
+                8 => active_mask |= (1 << 10) | (1 << 11) | (1 << 14), // 여덟시
+                9 => active_mask |= (1 << 12) | (1 << 13) | (1 << 14), // 아홉시
+                10 => active_mask |= (1 << 0) | (1 << 14),            // 열시
+                11 => active_mask |= (1 << 0) | (1 << 1) | (1 << 14), // 열한시
                 _ => (),
             }
-            if m1 == 5 {
-                leds.extend(vec![23, 24]); // 오분
-            } else {
-                leds.extend(vec![24]); // 분
-            }
-        }
-        self.show_leds(leds);
-    }
 
-    fn show_leds(&mut self, leds: Vec<u8>) {
-        // let leds = remap(leds);
-        match net::get_net_cmd() {
-            Ok(cmd) => {
-                if !cmd.is_empty() {
-                    log::warn!("busy for net cmd: {cmd:?}. skip show_leds()");
-                    return;
+            // 분 (Minute)
+            if m10 > 0 || m1 > 0 {
+                match m10 {
+                    1 => active_mask |= 1 << 22,          // 십
+                    2 => active_mask |= (1 << 17) | (1 << 19), // 이십
+                    3 => active_mask |= (1 << 18) | (1 << 19), // 삼십
+                    4 => active_mask |= (1 << 20) | (1 << 22), // 사십
+                    5 => active_mask |= (1 << 21) | (1 << 22), // 오십
+                    _ => (),
+                }
+                if m1 == 5 {
+                    active_mask |= (1 << 23) | (1 << 24); // 오분
+                } else if m10 > 0 || m1 > 0 {
+                    active_mask |= 1 << 24; // 분
                 }
             }
-            Err(e) => {
-                log::warn!("get_net_cmd error: {e:?}");
+        }
+
+        self.show_leds_mask(active_mask).await;
+    }
+
+    async fn show_leds_mask(&mut self, mask: u32) {
+        if let Ok(cmd) = net::get_net_cmd() {
+            if !cmd.is_empty() {
+                warn!("Busy with net cmd: {}. Skipping show_leds()", cmd);
+                return;
             }
         }
 
-        let led_hsv = Hsv {
+        let hsv = Hsv {
             hue: *global::LED_HUE.lock().unwrap(),
             sat: *global::LED_SAT.lock().unwrap(),
             val: *global::LED_VAL.lock().unwrap(),
         };
 
-        // let _write_guard = LED_WRITE_LOCK.write().unwrap();
-
-        // Minimize critical section time by preparing data outside
+        let rgb = hsv2rgb(hsv);
         let mut data = [RGB8::default(); LED_NUM];
-        let led_rgb = hsv2rgb(led_hsv);
-        let remapped_leds = remap(leds);
 
-        // Fill LED data outside critical section
-        for l in remapped_leds {
-            data[l as usize] = led_rgb;
+        for i in 0..LED_NUM {
+            if (mask & (1 << i)) != 0 {
+                data[remap(i as u8) as usize] = rgb;
+            }
         }
 
-        // Apply gamma correction outside critical section
         let gamma_data = gamma(data.iter().cloned());
 
-        match self.sleds.lock() {
-            Ok(mut sleds) => {
-                interrupt::free(|| {
-                    let _ = sleds.write(gamma_data);
-                });
-            }
-            Err(e) => {
-                log::error!("sleds lock error: {e:?}");
-            }
+        if let Ok(mut sleds) = self.sleds.lock() {
+            interrupt::free(|| {
+                let _ = sleds.write(gamma_data);
+            });
         }
 
-        // Use global helper functions for better task management
-        task::block_on(async {
-            global::yield_to_other_tasks().await;
-        });
+        global::yield_to_other_tasks().await;
     }
 
-    pub fn turn_on_all(&mut self) {
-        let all_leds: Vec<u8> = (0..LED_NUM as u8).collect();
-        self.show_leds(all_leds);
-        // self.show_leds(vec![0]);
+    pub async fn turn_on_all(&mut self) {
+        self.show_leds_mask((1 << LED_NUM) - 1).await;
     }
 }
 
-fn remap(leds: Vec<u8>) -> Vec<u8> {
+#[inline(always)]
+fn remap(index: u8) -> u8 {
     #[cfg(feature = "tr_to_left")]
     const MAPPING: [u8; 25] = [
         4, 3, 2, 1, 0, 5, 6, 7, 8, 9, 14, 13, 12, 11, 10, 15, 16, 17, 18, 19, 24, 23, 22, 21, 20,
@@ -231,5 +202,5 @@ fn remap(leds: Vec<u8>) -> Vec<u8> {
     const MAPPING: [u8; 25] = [
         4, 5, 14, 15, 24, 3, 6, 13, 16, 23, 2, 7, 12, 17, 22, 1, 8, 11, 18, 21, 0, 9, 10, 19, 20,
     ];
-    leds.into_iter().map(|x| MAPPING[x as usize]).collect()
+    MAPPING[index as usize]
 }

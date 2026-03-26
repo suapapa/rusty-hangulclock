@@ -1,370 +1,138 @@
 use esp_idf_svc::nvs::*;
-use log::info;
+use log::{debug, info, warn};
+
+fn get_nvs(namespace: &str, read_only: bool) -> anyhow::Result<EspNvs<NvsCustom>> {
+    let partition = EspCustomNvsPartition::take("user_nvs")?;
+    EspNvs::new(partition, namespace, !read_only)
+        .map_err(|e| anyhow::anyhow!("Failed to open NVS namespace {:?}: {:?}", namespace, e))
+}
 
 pub fn set_wifi_cred(ssid: &str, pass: &str) -> anyhow::Result<()> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
+    let nvs = get_nvs("cred_ns", false)?;
 
-    let ns = "cred_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
+    nvs.set_str("ssid", ssid)
+        .map_err(|e| anyhow::anyhow!("Failed to set ssid: {:?}", e))?;
+    nvs.set_str("pass", pass)
+        .map_err(|e| anyhow::anyhow!("Failed to set pass: {:?}", e))?;
 
-    let ssid_tag = "ssid";
-    let pass_tag = "pass";
-    match nvs.set_str(ssid_tag, ssid) {
-        Ok(_) => info!("{ssid_tag:?} updated"),
-        Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", ssid_tag, e)),
-    };
-    match nvs.set_str(pass_tag, pass) {
-        Ok(_) => info!("{pass_tag:?} updated"),
-        Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", pass_tag, e)),
-    };
-
+    info!("WiFi credentials updated");
     Ok(())
 }
 
 pub fn get_wifi_cred() -> anyhow::Result<(String, String)> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
+    let nvs = get_nvs("cred_ns", true)?;
 
-    let ns = "cred_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
-
-    // String values are limited in the IDF to 4000 bytes, but our buffer is
-    // shorter.
     const MAX_STR_LEN: usize = 100;
-    let ssid_tag = "ssid";
-    let pass_tag = "pass";
+    let mut buffer = [0u8; MAX_STR_LEN];
 
-    let ssid: String;
-    let pass: String;
+    let ssid = nvs
+        .get_str("ssid", &mut buffer)?
+        .ok_or_else(|| anyhow::anyhow!("SSID not found"))?
+        .to_string();
 
-    let ssid_str_len: usize = nvs.str_len(ssid_tag).map_or(0, |v| {
-        info!("Got stored string length of {v:?}");
-        let vv = v.unwrap_or(0);
-        if vv >= MAX_STR_LEN {
-            info!("Too long, trimming");
-            0
-        } else {
-            vv
-        }
-    });
-    match ssid_str_len == 0 {
-        true => {
-            info!("{ssid_tag:?} does not seem to exist");
-            return Err(anyhow::anyhow!("Failed to get {:?}", ssid_tag));
-        }
-        false => {
-            let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
-            match nvs.get_str(ssid_tag, &mut buffer).unwrap() {
-                Some(v) => {
-                    info!("{ssid_tag:?} = {v:?}");
-                    ssid = v.to_string();
-                }
-                None => {
-                    info!("We got nothing from {ssid_tag:?}");
-                    return Err(anyhow::anyhow!("Failed to get {:?}", ssid_tag));
-                }
-            };
-        }
-    };
-    let pass_str_len: usize = nvs.str_len(pass_tag).map_or(0, |v| {
-        info!("Got stored string length of {v:?}");
-        let vv = v.unwrap_or(0);
-        if vv >= MAX_STR_LEN {
-            info!("Too long, trimming");
-            0
-        } else {
-            vv
-        }
-    });
-    match pass_str_len == 0 {
-        true => {
-            info!("{pass_tag:?} does not seem to exist");
-            return Err(anyhow::anyhow!("Failed to get {:?}", pass_tag));
-        }
-        false => {
-            let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
-            match nvs.get_str(pass_tag, &mut buffer).unwrap() {
-                Some(v) => {
-                    info!("{pass_tag:?} = {v:?}");
-                    pass = v.to_string();
-                }
-                None => {
-                    info!("We got nothing from {pass_tag:?}");
-                    return Err(anyhow::anyhow!("Failed to get {:?}", pass_tag));
-                }
-            };
-        }
-    };
+    let mut buffer = [0u8; MAX_STR_LEN];
+    let pass = nvs
+        .get_str("pass", &mut buffer)?
+        .ok_or_else(|| anyhow::anyhow!("Password not found"))?
+        .to_string();
 
     Ok((ssid, pass))
 }
 
 pub fn set_hsv(hue: u8, sat: u8, val: u8) -> anyhow::Result<()> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
+    let nvs = get_nvs("hsv_ns", false)?;
 
-    let ns = "hsv_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
+    nvs.set_u8("hue", hue)?;
+    nvs.set_u8("sat", sat)?;
+    nvs.set_u8("val", val)?;
 
-    let hue_tag = "hue";
-    let sat_tag = "sat";
-    let val_tag = "val";
-
-    match nvs.set_u8(hue_tag, hue) {
-        Ok(_) => info!("{hue_tag:?} updated"),
-        Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", hue_tag, e)),
-    };
-    match nvs.set_u8(sat_tag, sat) {
-        Ok(_) => info!("{sat_tag:?} updated"),
-        Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", sat_tag, e)),
-    };
-    match nvs.set_u8(val_tag, val) {
-        Ok(_) => info!("{val_tag:?} updated"),
-        Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", val_tag, e)),
-    };
+    info!("HSV values updated: ({}, {}, {})", hue, sat, val);
     Ok(())
 }
 
 pub fn get_hsv() -> anyhow::Result<(u8, u8, u8)> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
+    let nvs = get_nvs("hsv_ns", true)?;
 
-    let ns = "hsv_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
-
-    let hue_tag = "hue";
-    let sat_tag = "sat";
-    let val_tag = "val";
-
-    let hue = nvs.get_u8(hue_tag).map(|v| v.unwrap_or(0)).unwrap_or(0);
-    let sat = nvs.get_u8(sat_tag).map(|v| v.unwrap_or(255)).unwrap_or(255);
-    let val = nvs.get_u8(val_tag).map(|v| v.unwrap_or(255)).unwrap_or(255);
+    let hue = nvs.get_u8("hue")?.unwrap_or(0);
+    let sat = nvs.get_u8("sat")?.unwrap_or(255);
+    let val = nvs.get_u8("val")?.unwrap_or(255);
 
     Ok((hue, sat, val))
 }
 
 pub fn set_utc_offset(offset: i32) -> anyhow::Result<()> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
-
-    let ns = "utc_offset_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
-
-    let offset_tag = "offset";
-    match nvs.set_i32(offset_tag, offset) {
-        Ok(_) => info!("{offset_tag:?} updated"),
-        Err(e) => return Err(anyhow::anyhow!("Failed to set {:?}: {:?}", offset_tag, e)),
-    };
-
+    let nvs = get_nvs("utc_offset_ns", false)?;
+    nvs.set_i32("offset", offset)?;
+    info!("UTC offset updated: {}", offset);
     Ok(())
 }
 
 pub fn get_utc_offset() -> anyhow::Result<i32> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
-
-    let ns = "utc_offset_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
-
-    let offset_tag = "offset";
-    let offset = nvs
-        .get_i32(offset_tag)
-        .map(|v| v.unwrap_or(9)) // default offset is 9, Asia/Seoul
-        .unwrap_or(0);
-
+    let nvs = get_nvs("utc_offset_ns", true)?;
+    let offset = nvs.get_i32("offset")?.unwrap_or(9); // Default to KST
     Ok(offset)
 }
 
 pub fn get_device_id() -> anyhow::Result<String> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
+    let nvs = get_nvs("device_id_ns", false)?;
 
-    let ns = "device_id_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
-
-    // String values are limited in the IDF to 4000 bytes, but our buffer is
-    // shorter.
     const MAX_STR_LEN: usize = 100;
-    let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
+    let mut buffer = [0u8; MAX_STR_LEN];
 
-    match nvs.get_str("device_id", &mut buffer) {
-        Ok(Some(id)) => Ok(id.to_string()),
-        _ => {
-            // make timestamp to RFC3339 format
-            let timestamp = std::time::SystemTime::now();
-            let rfc3339_timestamp = chrono::DateTime::<chrono::Utc>::from(timestamp)
-                .with_timezone(&chrono::FixedOffset::east_opt(9 * 3600).unwrap())
-                .to_rfc3339();
-
-            let random = rand::random::<u32>();
-            let new_id = format!("{rfc3339_timestamp}-{random:x}");
-
-            // Store the new ID in NVS
-            match nvs.set_str("device_id", &new_id) {
-                Ok(_) => {
-                    info!("New device ID generated and stored: {new_id}");
-                    Ok(new_id)
-                }
-                Err(e) => Err(anyhow::anyhow!("Failed to store device ID: {:?}", e)),
-            }
-        }
+    if let Some(id) = nvs.get_str("device_id", &mut buffer)? {
+        return Ok(id.to_string());
     }
+
+    // Generate new ID if not found
+    let timestamp = chrono::Utc::now()
+        .with_timezone(&chrono::FixedOffset::east_opt(9 * 3600).unwrap())
+        .to_rfc3339();
+    let random = rand::random::<u32>();
+    let new_id = format!("{}-{}", timestamp, random);
+
+    nvs.set_str("device_id", &new_id)?;
+    info!("New device ID generated: {}", new_id);
+    Ok(new_id)
 }
 
 pub fn get_boot_count() -> anyhow::Result<u32> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
-
-    let ns = "boot_count_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
-
-    let boot_count = nvs
-        .get_u32("boot_count")
-        .map(|v| v.unwrap_or(0))
-        .unwrap_or(0);
-
-    // Increment boot count
-    // let new_count = boot_count + 1;
-    // nvs.set_u32("boot_count", new_count)?;
-    // nvs.commit()?;
-
-    Ok(boot_count)
+    let nvs = get_nvs("boot_count_ns", true)?;
+    let count = nvs.get_u32("boot_count")?.unwrap_or(0);
+    Ok(count)
 }
 
 pub fn set_boot_count(count: u32) -> anyhow::Result<()> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
-
-    let ns = "boot_count_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
-
+    let nvs = get_nvs("boot_count_ns", false)?;
     nvs.set_u32("boot_count", count)?;
-    // nvs.commit()?;
-
     Ok(())
 }
 
 pub fn get_device_no() -> anyhow::Result<String> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
-
-    let ns = "device_no_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
+    let nvs = get_nvs("device_no_ns", false)?;
 
     const MAX_STR_LEN: usize = 10;
-    let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
-    let device_no = match nvs.get_str("device_no", &mut buffer) {
-        Ok(Some(v)) => v.to_string(),
-        _ => {
-            let new_id = get_device_no_from_env();
-            if !new_id.is_empty() {
-                nvs.set_str("device_no", new_id)?;
-                new_id.to_string()
-            } else {
-                "0000".to_string()
-            }
-        }
-    };
+    let mut buffer = [0u8; MAX_STR_LEN];
 
-    Ok(device_no.to_string())
-}
+    if let Some(no) = nvs.get_str("device_no", &mut buffer)? {
+        return Ok(no.to_string());
+    }
 
-fn get_device_no_from_env() -> &'static str {
-    option_env!("RUSTY_HANGULCLOCK_NO").unwrap_or_default()
+    let env_no = option_env!("RUSTY_HANGULCLOCK_NO").unwrap_or("0000");
+    nvs.set_str("device_no", env_no)?;
+    Ok(env_no.to_string())
 }
 
 pub fn get_owner() -> anyhow::Result<String> {
-    let nvs_default_partition: EspNvsPartition<NvsCustom> =
-        EspCustomNvsPartition::take("user_nvs")?;
-
-    let ns = "owner_ns";
-    let nvs = match EspNvs::new(nvs_default_partition, ns, true) {
-        Ok(nvs) => {
-            info!("Got namespace {ns:?} from default partition");
-            nvs
-        }
-        Err(e) => return Err(anyhow::anyhow!("Could't get namespace {:?}", e)),
-    };
+    let nvs = get_nvs("owner_ns", false)?;
 
     const MAX_STR_LEN: usize = 100;
-    let mut buffer: [u8; MAX_STR_LEN] = [0; MAX_STR_LEN];
-    let owner = match nvs.get_str("owner", &mut buffer) {
-        Ok(Some(v)) => v.to_string(),
-        _ => {
-            let env_owner = get_owner_from_env();
-            if !env_owner.is_empty() {
-                nvs.set_str("owner", env_owner)?;
-                env_owner.to_string()
-            } else {
-                "".to_string()
-            }
-        }
-    };
+    let mut buffer = [0u8; MAX_STR_LEN];
 
-    Ok(owner)
-}
+    if let Some(owner) = nvs.get_str("owner", &mut buffer)? {
+        return Ok(owner.to_string());
+    }
 
-fn get_owner_from_env() -> &'static str {
-    option_env!("RUSTY_HANGULCLOCK_OWNER").unwrap_or_default()
+    let env_owner = option_env!("RUSTY_HANGULCLOCK_OWNER").unwrap_or("");
+    nvs.set_str("owner", env_owner)?;
+    Ok(env_owner.to_string())
 }

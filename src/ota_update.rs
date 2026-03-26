@@ -9,111 +9,89 @@ use log::{debug, info, warn};
 use crate::{global, net, timer};
 
 pub async fn ota_update() -> anyhow::Result<()> {
-    let ping_url = "https://hangulclock.homin.dev/v1/ping";
+    const PING_URL: &str = "https://hangulclock.homin.dev/v1/ping";
     let mut ping_success = false;
-    for attempt in 1..=10 {
-        info!("Ping attempt {attempt}: attempting to connect to {ping_url}");
-        let connection = EspHttpConnection::new(&HttpConfiguration {
-            use_global_ca_store: true,
-            crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
-            timeout: Some(StdDuration::from_secs(30)), // Increased from 10s to 30s
-            ..Default::default()
-        })?;
-        let mut client = Client::wrap(connection);
-        let request = client.request(Method::Get, ping_url, &[])?;
-        info!("Ping attempt {attempt}: submitting request (may take up to 30s)...");
-        let response = request.submit()?;
-        info!("Ping attempt {}: status {}", attempt, response.status());
-        if response.status() == 200 {
-            ping_success = true;
-            break;
-        }
-        if attempt < 10 {
-            info!("Ping failed, retrying in 10 seconds...");
-            timer::sleep_secs(10).await;
-        }
-    }
-    if !ping_success {
-        anyhow::bail!("Failed to get 200 from /v1/ping after 10 attempts");
-    }
 
-    let connection = EspHttpConnection::new(&HttpConfiguration {
+    let http_config = HttpConfiguration {
         use_global_ca_store: true,
         crt_bundle_attach: Some(esp_idf_svc::sys::esp_crt_bundle_attach),
-        timeout: Some(StdDuration::from_secs(300)), // 5 minutes for OTA download
+        timeout: Some(StdDuration::from_secs(30)),
         ..Default::default()
-    })?;
-    let mut client = Client::wrap(connection);
-    let url = format!(
+    };
+
+    for attempt in 1..=5 {
+        info!("Ping attempt {}: connecting to {}", attempt, PING_URL);
+        let connection = EspHttpConnection::new(&http_config)?;
+        let mut client = Client::wrap(connection);
+        
+        if let Ok(request) = client.request(Method::Get, PING_URL, &[]) {
+            if let Ok(response) = request.submit() {
+                if response.status() == 200 {
+                    ping_success = true;
+                    break;
+                }
+            }
+        }
+        timer::sleep_secs(5).await;
+    }
+
+    if !ping_success {
+        anyhow::bail!("Failed to reach update server after 5 attempts");
+    }
+
+    let update_url = format!(
         "https://hangulclock.homin.dev/v1/update?version={}&rev={}",
         global::get_sw_version(),
         global::get_hw_revision(),
     );
 
-    info!("Creating HTTP request for update (timeout: 5 minutes)...");
-    let request = client.request(Method::Get, url.as_ref(), &[])?;
-    info!("HTTP request created, now submitting (connection phase)...");
+    let ota_config = HttpConfiguration {
+        timeout: Some(StdDuration::from_secs(300)), // 5 mins
+        ..http_config
+    };
+
+    let connection = EspHttpConnection::new(&ota_config)?;
+    let mut client = Client::wrap(connection);
+    let request = client.request(Method::Get, &update_url, &[])?;
     let mut response = request.submit()?;
-    timer::sleep_millis(10).await;
 
-    info!("Response code: {}", response.status());
-    if response.status() == 200 {
-        info!("Applying update...");
-        let mut ota = EspOta::new().expect("obtain OTA instance");
-        let mut update = ota.initiate_update().expect("initiate OTA");
-        let mut buf = Box::new([0u8; 4096]);
-        let mut flashing_idx = 0;
-
-        let total_bin_size = response
-            .header("Content-Length")
-            .unwrap_or("0")
-            .parse::<usize>()
-            .unwrap_or(0);
-        let mut total_flash_size = 0usize;
-        let mut read_retry_cnt = 0;
-        const READ_RETRY_CNT_MAX: u32 = 5;
-
-        debug!("Total bin size: {total_bin_size}");
-        loop {
-            // global::yield_to_other_tasks().await;
-            match response.read(&mut buf[..]) {
-                Ok(n) => {
-                    if n == 0 {
-                        break;
-                    }
-                    read_retry_cnt = 0;
-                    update.write(&buf[..n]).expect("write OTA data");
-                    total_flash_size += n;
-
-                    flashing_idx += 1;
-                    if flashing_idx % 100 == 0 {
-                        let progress = if total_bin_size > 0 {
-                            (total_flash_size as u64 * 100 / total_bin_size as u64) as usize
-                        } else {
-                            0
-                        };
-                        // info!("Progress: {progress}%");
-                        net::set_result_net(&format!("{progress}%"));
-                        global::yield_to_other_tasks().await;
-                    }
-                }
-                Err(e) => {
-                    read_retry_cnt += 1;
-                    warn!("Failed to read OTA data: {e} (retry {read_retry_cnt}/{READ_RETRY_CNT_MAX})");
-                    if read_retry_cnt >= READ_RETRY_CNT_MAX {
-                        anyhow::bail!("Failed to read OTA data: {e}");
-                    }
-                }
-            }
-        }
-        update.complete().expect("complete OTA");
-        net::set_result_net("OK");
-        timer::sleep_secs(1).await;
-        info!("Update complete, rebooting...");
-        esp_idf_svc::hal::reset::restart();
-        // Ok(())
-    } else {
-        info!("No update available");
-        Err(anyhow::anyhow!("No update available"))
+    if response.status() != 200 {
+        info!("No update available or server error: {}", response.status());
+        return Ok(());
     }
+
+    info!("Applying update...");
+    let mut ota = EspOta::new()?;
+    let mut update = ota.initiate_update()?;
+    
+    let mut buf = [0u8; 4096];
+    let mut total_downloaded = 0usize;
+    let total_size = response.header("Content-Length")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(0);
+
+    let mut watchdog = global::WatchdogManager::new(100, 10);
+
+    loop {
+        if watchdog.update() { global::yield_to_other_tasks().await; }
+
+        let n = response.read(&mut buf)?;
+        if n == 0 { break; }
+
+        update.write(&buf[..n])?;
+        total_downloaded += n;
+
+        if total_size > 0 && total_downloaded % 16384 == 0 {
+            let progress = (total_downloaded * 100) / total_size;
+            net::set_result_net(&format!("{}%", progress));
+            info!("Progress: {}%", progress);
+        }
+    }
+
+    update.complete()?;
+    net::set_result_net("OK");
+    info!("Update complete, rebooting...");
+    timer::sleep_secs(2).await;
+    esp_idf_svc::hal::reset::restart();
+    Ok(())
 }
