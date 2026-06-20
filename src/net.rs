@@ -162,7 +162,9 @@ pub async fn connect_ap(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resul
     });
 
     wifi.set_configuration(&config)?;
-    wifi.start().await?;
+    embassy_time::with_timeout(embassy_time::Duration::from_secs(15), wifi.start())
+        .await
+        .map_err(|_| anyhow::anyhow!("WiFi start timeout (AP)"))??;
 
     embassy_time::with_timeout(embassy_time::Duration::from_secs(30), wifi.wait_netif_up())
         .await
@@ -179,7 +181,9 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
         ..Default::default()
     });
     wifi.set_configuration(&dummy_config)?;
-    wifi.start().await?;
+    embassy_time::with_timeout(embassy_time::Duration::from_secs(15), wifi.start())
+        .await
+        .map_err(|_| anyhow::anyhow!("WiFi start timeout (WPS)"))??;
     apply_wifi_stability_settings();
 
     let hw_rev = global::get_hw_revision();
@@ -231,7 +235,9 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
     let _ = sync_time_without_wifi().await;
     let _ = send_report_without_wifi().await;
 
-    wifi.stop().await?;
+    embassy_time::with_timeout(embassy_time::Duration::from_secs(15), wifi.stop())
+        .await
+        .map_err(|_| anyhow::anyhow!("WiFi stop timeout (WPS)"))??;
     Ok(())
 }
 
@@ -315,14 +321,18 @@ pub async fn sync_time_and_send_report(
         ..Default::default()
     }))?;
 
-    wifi.start().await?;
+    embassy_time::with_timeout(embassy_time::Duration::from_secs(15), wifi.start())
+        .await
+        .map_err(|_| anyhow::anyhow!("WiFi start timeout"))??;
     apply_wifi_stability_settings();
     connect_wifi_with_timeout(wifi).await?;
 
     let _ = sync_time_without_wifi().await;
     let _ = send_report_without_wifi().await;
 
-    wifi.stop().await?;
+    embassy_time::with_timeout(embassy_time::Duration::from_secs(15), wifi.stop())
+        .await
+        .map_err(|_| anyhow::anyhow!("WiFi stop timeout"))??;
     Ok(())
 }
 
@@ -335,12 +345,16 @@ async fn ota_update_with_wifi(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow:
         ..Default::default()
     }))?;
 
-    wifi.start().await?;
+    embassy_time::with_timeout(embassy_time::Duration::from_secs(15), wifi.start())
+        .await
+        .map_err(|_| anyhow::anyhow!("WiFi start timeout (OTA)"))??;
     apply_wifi_stability_settings();
     connect_wifi_with_timeout(wifi).await?;
 
     let res = ota_update::ota_update().await;
-    wifi.stop().await?;
+    embassy_time::with_timeout(embassy_time::Duration::from_secs(15), wifi.stop())
+        .await
+        .map_err(|_| anyhow::anyhow!("WiFi stop timeout (OTA)"))??;
     res
 }
 
