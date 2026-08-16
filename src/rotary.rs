@@ -16,16 +16,16 @@ pub async fn rotary_encoder_loop(
     let mut debounce_count = 0;
     const DEBOUNCE_THRESHOLD: u8 = 3;
 
-    let mut watchdog = global::WatchdogManager::new(1000, 100);
+    let mut watchdog = global::WatchdogManager::new(global::TaskId::Rotary, 1000, 100);
 
     loop {
+        if watchdog.update() {
+            global::yield_to_other_tasks().await;
+        }
+
         if net::check_net_cmd_or_skip().await.is_err() {
             ticker.next().await;
             continue;
-        }
-
-        if watchdog.update() {
-            global::yield_to_other_tasks().await;
         }
 
         match enc.update() {

@@ -96,6 +96,7 @@ fn main() -> anyhow::Result<()> {
 
         info!("Starting tasks...");
         global::register_task_with_wdt("main");
+        global::start_stall_watchdog();
 
         let net_task = net::net_loop(&mut wifi);
         let show_time_task = show_time_loop(&mut sleds);
@@ -137,7 +138,7 @@ fn setup_panic_hook() {
 }
 
 async fn time_sync_loop() -> anyhow::Result<()> {
-    let mut watchdog = global::WatchdogManager::new(60, 10);
+    let mut watchdog = global::WatchdogManager::new(global::TaskId::TimeSync, 60, 10);
     let mut sync_check_cnt: u64 = 0;
 
     loop {
@@ -156,6 +157,7 @@ async fn time_sync_loop() -> anyhow::Result<()> {
             if net::set_net_cmd("NTP") {
                 let start = std::time::Instant::now();
                 while start.elapsed().as_secs() < 60 {
+                    global::heartbeat(global::TaskId::TimeSync);
                     let res = net::get_result_net();
                     if res == "OK" || res == "NG" {
                         break;
@@ -176,7 +178,7 @@ async fn inc_boot_count() -> anyhow::Result<()> {
 async fn show_time_loop<SPI: embedded_hal::spi::SpiBus>(
     sleds: &mut panel::Sleds<SPI>,
 ) -> anyhow::Result<()> {
-    let mut watchdog = global::WatchdogManager::new(60, 10);
+    let mut watchdog = global::WatchdogManager::new(global::TaskId::ShowTime, 60, 10);
     let mut last_h = 255;
     let mut last_m = 255;
     let utc_offset = i64::from(nvs::get_utc_offset().unwrap_or(9));

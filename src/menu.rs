@@ -92,7 +92,7 @@ pub async fn menu_loop(
     let menu_len = MenuOption::ALL.len();
     let mut menu_enter_ts = get_ts();
     let mut sub_menu = false;
-    let mut watchdog = global::WatchdogManager::new(200, 20);
+    let mut watchdog = global::WatchdogManager::new(global::TaskId::Menu, 200, 20);
 
     let owner_str = nvs::get_owner()
         .ok()
@@ -103,12 +103,12 @@ pub async fn menu_loop(
     loop {
         timer::sleep_millis(50).await;
 
-        if net::check_net_cmd_or_skip().await.is_err() {
-            continue;
-        }
-
         if watchdog.update() {
             global::yield_to_other_tasks().await;
+        }
+
+        if net::check_net_cmd_or_skip().await.is_err() {
+            continue;
         }
 
         let in_menu = *global::IN_MENU.lock().unwrap();

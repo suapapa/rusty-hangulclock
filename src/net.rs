@@ -50,7 +50,7 @@ pub async fn net_loop(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<
     // Trigger initial time sync
     let _ = set_net_cmd("NTP");
 
-    let mut watchdog = global::WatchdogManager::new(100, 10);
+    let mut watchdog = global::WatchdogManager::new(global::TaskId::Net, 100, 10);
 
     loop {
         timer::sleep_millis(100).await;
@@ -70,6 +70,7 @@ pub async fn net_loop(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<
         match cmd {
             NetCmd::Ap => {
                 info!("Handling AP command");
+                let _stall = NetStallGuard::new(90_000);
                 set_result_net("");
                 match connect_ap(wifi).await {
                     Ok(_) => {
@@ -88,6 +89,7 @@ pub async fn net_loop(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<
             }
             NetCmd::Wps => {
                 info!("Handling WPS command");
+                let _stall = NetStallGuard::new(150_000);
                 set_result_net("");
                 match connect_wps(wifi).await {
                     Ok(_) => {
@@ -103,14 +105,24 @@ pub async fn net_loop(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<
             }
             NetCmd::Ntp => {
                 info!("Handling NTP command");
+                let _stall = NetStallGuard::new(120_000);
                 set_result_net("");
-                match sync_time_and_send_report(wifi).await {
-                    Ok(_) => {
+                match embassy_time::with_timeout(
+                    embassy_time::Duration::from_secs(180),
+                    sync_time_and_send_report(wifi),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => {
                         info!("NTP sync and report successful");
                         set_result_net("OK");
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         warn!("NTP command failed: {:?}", e);
+                        set_result_net("NG");
+                    }
+                    Err(_) => {
+                        warn!("NTP command timed out after 180s");
                         set_result_net("NG");
                     }
                 }
@@ -118,6 +130,9 @@ pub async fn net_loop(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<
             }
             NetCmd::Ota => {
                 info!("Handling OTA command");
+                // No wall-clock timeout: firmware download can take several
+                // minutes. Liveness is progress heartbeats (chunk reads).
+                let _stall = NetStallGuard::new(120_000);
                 if let Ok(mut mode) = global::OTA_MODE.try_lock() {
                     *mode = true;
                 }
@@ -139,6 +154,24 @@ pub async fn net_loop(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Result<
             }
             NetCmd::None => {}
         }
+    }
+}
+
+/// Raises the net_loop stall budget for one command, then restores it.
+struct NetStallGuard;
+
+impl NetStallGuard {
+    fn new(limit_ms: u32) -> Self {
+        global::heartbeat(global::TaskId::Net);
+        global::set_net_stall_limit_ms(limit_ms);
+        Self
+    }
+}
+
+impl Drop for NetStallGuard {
+    fn drop(&mut self) {
+        global::reset_net_stall_limit();
+        global::heartbeat(global::TaskId::Net);
     }
 }
 
@@ -205,9 +238,21 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
 
     let mut retries = 5;
     while retries > 0 {
-        match wifi.start_wps(&wps_config).await {
-            Ok(WpsStatus::SuccessConnected) => break,
-            Ok(WpsStatus::SuccessMultipleAccessPoints(credentials)) => {
+        global::heartbeat(global::TaskId::Net);
+        match embassy_time::with_timeout(
+            embassy_time::Duration::from_secs(130),
+            wifi.start_wps(&wps_config),
+        )
+        .await
+        {
+            Err(_) => {
+                warn!("WPS start timed out");
+                retries -= 1;
+                timer::sleep_secs(3).await;
+                continue;
+            }
+            Ok(Ok(WpsStatus::SuccessConnected)) => break,
+            Ok(Ok(WpsStatus::SuccessMultipleAccessPoints(credentials))) => {
                 info!("Multiple credentials received, connecting to first");
                 let cred = &credentials[0];
                 wifi.set_configuration(&Configuration::Client(ClientConfiguration {
@@ -217,13 +262,13 @@ pub async fn connect_wps(wifi: &mut AsyncWifi<EspWifi<'static>>) -> anyhow::Resu
                 }))?;
                 break;
             }
-            Ok(WpsStatus::Failure | WpsStatus::Timeout) => {
+            Ok(Ok(WpsStatus::Failure | WpsStatus::Timeout)) => {
                 retries -= 1;
                 timer::sleep_secs(3).await;
                 continue;
             }
-            Ok(other) => return Err(anyhow::anyhow!("WPS failed with status: {:?}", other)),
-            Err(e) => return Err(anyhow::anyhow!("WPS error: {:?}", e)),
+            Ok(Ok(other)) => return Err(anyhow::anyhow!("WPS failed with status: {:?}", other)),
+            Ok(Err(e)) => return Err(anyhow::anyhow!("WPS error: {:?}", e)),
         }
     }
 
@@ -262,6 +307,7 @@ async fn sync_time_without_wifi() -> anyhow::Result<()> {
             }
             _ => {
                 retries -= 1;
+                global::heartbeat(global::TaskId::Net);
                 timer::sleep_secs(5).await;
             }
         }
@@ -271,6 +317,7 @@ async fn sync_time_without_wifi() -> anyhow::Result<()> {
 
 async fn send_report_without_wifi() -> anyhow::Result<()> {
     for attempt in 1..=3 {
+        global::heartbeat(global::TaskId::Net);
         match try_send_report().await {
             Ok(_) => return Ok(()),
             Err(e) => {
@@ -379,9 +426,14 @@ pub fn get_net_cmd() -> Result<String, String> {
 }
 
 fn clear_net_cmd() {
-    if let Ok(mut guard) = global::CMD_NET.try_lock() {
-        guard.clear();
+    for _ in 0..100 {
+        if let Ok(mut guard) = global::CMD_NET.try_lock() {
+            guard.clear();
+            return;
+        }
+        std::thread::yield_now();
     }
+    warn!("Failed to clear net cmd after retries");
 }
 
 pub fn set_result_net(result: &str) -> bool {

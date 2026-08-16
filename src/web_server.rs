@@ -132,7 +132,7 @@ pub async fn start_web_server() -> anyhow::Result<()> {
     info!("Web server started");
 
     // Watchdog manager (1초 * 60 = 60초마다 체크, 10회마다 yield)
-    let mut watchdog = global::WatchdogManager::new(60, 10);
+    let mut watchdog = global::WatchdogManager::new(global::TaskId::Net, 60, 10);
 
     loop {
         // Watchdog 체크 및 yield

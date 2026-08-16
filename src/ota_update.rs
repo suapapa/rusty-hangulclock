@@ -20,6 +20,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
     };
 
     for attempt in 1..=5 {
+        global::heartbeat(global::TaskId::Net);
         info!("Ping attempt {}: connecting to {}", attempt, PING_URL);
         let connection = EspHttpConnection::new(&http_config)?;
         let mut client = Client::wrap(connection);
@@ -71,7 +72,7 @@ pub async fn ota_update() -> anyhow::Result<()> {
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(0);
 
-    let mut watchdog = global::WatchdogManager::new(100, 10);
+    let mut watchdog = global::WatchdogManager::new(global::TaskId::Net, 100, 10);
 
     loop {
         if watchdog.update() {

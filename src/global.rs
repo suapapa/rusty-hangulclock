@@ -1,5 +1,6 @@
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
-use std::time;
+use std::time::{self, Duration, Instant};
 
 use once_cell::sync::Lazy;
 
@@ -26,6 +27,117 @@ pub static UTC_OFFSET: Lazy<Mutex<i8>> = Lazy::new(|| Mutex::new(9)); // Default
 pub static BOOT_TIME: Lazy<Mutex<u128>> = Lazy::new(|| Mutex::new(0));
 pub static AP_MODE: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 pub static OTA_MODE: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
+
+/// Cooperative task identities for stall detection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(usize)]
+pub enum TaskId {
+    Net = 0,
+    TimeSync = 1,
+    ShowTime = 2,
+    Menu = 3,
+    Rotary = 4,
+}
+
+const TASK_COUNT: usize = 5;
+const DEFAULT_NET_STALL_MS: u32 = 90_000;
+
+/// Per-task stall limits. Net is overridden by [`set_net_stall_limit_ms`].
+const TASK_STALL_LIMIT_MS: [u32; TASK_COUNT] = [
+    DEFAULT_NET_STALL_MS, // Net
+    180_000,              // TimeSync sleeps 60s between iterations
+    90_000,               // ShowTime (must outlast blocking WiFi/HTTP timeouts)
+    90_000,               // Menu
+    90_000,               // Rotary
+];
+
+static MONOTONIC_ORIGIN: Lazy<Instant> = Lazy::new(Instant::now);
+static HEARTBEAT_MS: [AtomicU32; TASK_COUNT] = [
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+];
+static NET_STALL_LIMIT_MS: AtomicU32 = AtomicU32::new(DEFAULT_NET_STALL_MS);
+
+fn monotonic_ms() -> u32 {
+    MONOTONIC_ORIGIN.elapsed().as_millis() as u32
+}
+
+fn task_name(id: usize) -> &'static str {
+    match id {
+        0 => "net_loop",
+        1 => "time_sync_loop",
+        2 => "show_time_loop",
+        3 => "menu_loop",
+        4 => "rotary_encoder_loop",
+        _ => "unknown",
+    }
+}
+
+/// Record that `task` is still making progress.
+pub fn heartbeat(task: TaskId) {
+    HEARTBEAT_MS[task as usize].store(monotonic_ms(), Ordering::Relaxed);
+}
+
+/// Stretch or shrink the net_loop stall budget for the current command.
+///
+/// OTA should keep the default-ish budget and call [`heartbeat`] on download
+/// progress instead of allowing a multi-minute silent hang.
+pub fn set_net_stall_limit_ms(ms: u32) {
+    NET_STALL_LIMIT_MS.store(ms, Ordering::Relaxed);
+}
+
+pub fn reset_net_stall_limit() {
+    set_net_stall_limit_ms(DEFAULT_NET_STALL_MS);
+}
+
+/// Independent FreeRTOS thread: restarts the device if a task stops heartbeating.
+///
+/// `embassy_time::with_timeout` cannot interrupt blocking ESP-IDF calls
+/// (HTTP `submit`/`read`, some WiFi ops). This watchdog still fires because it
+/// does not share the async executor.
+pub fn start_stall_watchdog() {
+    let now = monotonic_ms();
+    for hb in &HEARTBEAT_MS {
+        hb.store(now, Ordering::Relaxed);
+    }
+
+    let spawn_result = std::thread::Builder::new()
+        .name("stall-wdt".into())
+        .stack_size(8 * 1024)
+        .spawn(|| loop {
+            std::thread::sleep(Duration::from_secs(5));
+            let now = monotonic_ms();
+            for (i, hb) in HEARTBEAT_MS.iter().enumerate() {
+                let last = hb.load(Ordering::Relaxed);
+                if last == 0 {
+                    continue;
+                }
+                let stalled = now.wrapping_sub(last);
+                let limit = if i == TaskId::Net as usize {
+                    NET_STALL_LIMIT_MS.load(Ordering::Relaxed)
+                } else {
+                    TASK_STALL_LIMIT_MS[i]
+                };
+                if stalled > limit {
+                    log::error!(
+                        "Stall watchdog: {} silent for {}ms (limit {}ms), restarting",
+                        task_name(i),
+                        stalled,
+                        limit
+                    );
+                    esp_idf_svc::hal::reset::restart();
+                }
+            }
+        });
+
+    match spawn_result {
+        Ok(_) => log::info!("Stall watchdog thread started"),
+        Err(e) => log::warn!("Failed to start stall watchdog: {e}"),
+    }
+}
 
 pub fn get_uptime() -> u128 {
     let now = match time::SystemTime::now().duration_since(time::UNIX_EPOCH) {
@@ -141,21 +253,24 @@ pub struct WatchdogManager {
     counter: u32,
     interval: u32,
     yield_interval: u32,
+    task: TaskId,
 }
 
 impl WatchdogManager {
     /// Create a new WatchdogManager with specified intervals
-    pub const fn new(watchdog_interval: u32, yield_interval: u32) -> Self {
+    pub const fn new(task: TaskId, watchdog_interval: u32, yield_interval: u32) -> Self {
         Self {
             counter: 0,
             interval: watchdog_interval,
             yield_interval,
+            task,
         }
     }
 
     /// Update watchdog counter and reset if needed. Returns true if yield is
     /// recommended.
     pub fn update(&mut self) -> bool {
+        heartbeat(self.task);
         self.counter = self.counter.saturating_add(1);
 
         if self.counter >= self.interval {
