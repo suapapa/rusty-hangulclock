@@ -1,8 +1,8 @@
 // Manual OTA release pipeline for rusty-hangulclock.
 //
 // Flow:
-//   1) Resolve SW_VERSION (param or FWVER)
-//   2) ./make_ota_bins.sh  → release/*.bin (HW rev 3, 4)
+//   1) Resolve SW_VERSION (param or FWVER) and selected HW revisions
+//   2) ./make_ota_bins.sh  → release/*.bin (selected HW rev 3 and/or 4)
 //   3) espRsCdnPush        → clone suapapa/homin-dev_asset, commit, push
 //   4) espRsOtaRegister    → POST metadata to hangulclock OTA API
 //
@@ -33,6 +33,16 @@ pipeline {
             name: 'SW_VERSION',
             defaultValue: '',
             description: 'OTA software version. Leave empty to use FWVER from the repo.'
+        )
+        booleanParam(
+            name: 'HW_REV_3',
+            defaultValue: true,
+            description: 'Build and release for HW revision 3.'
+        )
+        booleanParam(
+            name: 'HW_REV_4',
+            defaultValue: true,
+            description: 'Build and release for HW revision 4.'
         )
         booleanParam(
             name: 'SKIP_CDN',
@@ -68,6 +78,15 @@ pipeline {
                 checkout scm
                 script {
                     espRsResolveFwVer()
+
+                    def hwRevs = []
+                    if (params.HW_REV_3) { hwRevs << '3' }
+                    if (params.HW_REV_4) { hwRevs << '4' }
+                    if (hwRevs.isEmpty()) {
+                        error('Select at least one HW revision (HW_REV_3 and/or HW_REV_4).')
+                    }
+                    env.HW_REVISIONS = hwRevs.join(' ')
+                    echo "HW revisions: ${env.HW_REVISIONS}"
                 }
             }
         }
@@ -108,7 +127,7 @@ pipeline {
                         . "${HOME}/export-esp.sh"
                     fi
                     chmod +x ./make_ota_bins.sh
-                    ./make_ota_bins.sh -v "${SW_VERSION}"
+                    ./make_ota_bins.sh -v "${SW_VERSION}" -r "${HW_REVISIONS}"
                     echo "=== Built artifacts ==="
                     ls -la release/*_"${SW_VERSION}"_*.bin
                 '''
@@ -148,7 +167,7 @@ pipeline {
                 script {
                     espRsOtaRegister(
                         version: env.SW_VERSION,
-                        hwRevisions: ['3', '4'],
+                        hwRevisions: env.HW_REVISIONS.split(' ').toList(),
                         sourceDir: 'release',
                         binPrefix: env.OTA_BIN_PREFIX,
                         apiUrl: env.OTA_API_URL,

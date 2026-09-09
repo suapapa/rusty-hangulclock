@@ -10,10 +10,11 @@ if [ -f "${SCRIPT_DIR}/FWVER" ]; then
   SW_VERSION="$(tr -d '[:space:]' < "${SCRIPT_DIR}/FWVER")"
 fi
 
-while getopts "v:" opt; do
+while getopts "v:r:" opt; do
   case $opt in
     v) SW_VERSION="$OPTARG" ;;
-    \?) echo "Usage: $0 [-v SW_VERSION]"; exit 1 ;;
+    r) HW_REVISIONS="$OPTARG" ;;
+    \?) echo "Usage: $0 [-v SW_VERSION] [-r \"HW_REVISIONS\"]"; exit 1 ;;
   esac
 done
 
@@ -21,6 +22,18 @@ if [ -z "$SW_VERSION" ]; then
   echo "Error: SW_VERSION is empty (set FWVER or pass -v)"
   exit 1
 fi
+
+if [ -z "${HW_REVISIONS// }" ]; then
+  echo "Error: HW_REVISIONS is empty (pass -r \"3 4\")"
+  exit 1
+fi
+
+for rev in ${HW_REVISIONS}; do
+  if [ "$rev" != "3" ] && [ "$rev" != "4" ]; then
+    echo "Error: unsupported HW revision '$rev' (allowed: 3, 4)"
+    exit 1
+  fi
+done
 
 export SW_VERSION
 
