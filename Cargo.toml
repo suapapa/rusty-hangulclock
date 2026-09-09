@@ -20,8 +20,8 @@ opt-level = "z"
 [features]
 default = ["tr_to_left", "neopixel"]
 ledstrip = []
-neopixel = []
-dotstar = []
+neopixel = ["dep:ws2812-spi"]
+dotstar = ["dep:apa102-spi"]
 tr_to_left = []
 bl_to_top = []
 
@@ -38,9 +38,9 @@ embedded-graphics = "0.8.2"
 anyhow = "1.0.102"
 embedded-svc = "0.29.0"
 smart-leds = "0.4.0"
-apa102-spi = "0.5.1"
+apa102-spi = { version = "0.5.1", optional = true }
 embedded-hal = "1.0.0"
-ws2812-spi = { version = "0.5.1", features = ["std"] }
+ws2812-spi = { version = "0.5.1", features = ["std"], optional = true }
 futures = { version = "0.3.32", default-features = false, features = ["async-await", "std", "executor"] }
 lazy_static = { version = "1.5.0" }
 embassy-time = { version = "0.5.1", features = ["std", "generic-queue-64"] }
