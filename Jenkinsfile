@@ -1,7 +1,12 @@
-// Manual OTA release pipeline for rusty-hangulclock.
+// OTA release pipeline for rusty-hangulclock.
+//
+// Triggers:
+//   - Manual "Build with Parameters"
+//   - Git tag push (e.g. v35) via Multibranch / GitHub webhook
 //
 // Flow:
 //   1) Resolve SW_VERSION (param or FWVER) and selected HW revisions
+//   1b) If build is from tag vN, require FWVER == N (fail otherwise)
 //   2) ./make_ota_bins.sh  → release/*.bin (selected HW rev 3 and/or 4)
 //   3) espRsCdnPush        → clone suapapa/homin-dev_asset, commit, push
 //   4) espRsOtaRegister    → POST metadata to hangulclock OTA API
@@ -15,6 +20,14 @@
 //   Manage Jenkins → System → Global Pipeline Libraries
 //     Name: homin-jenkins-shared-lib  (must match @Library below)
 //     Source: https://github.com/suapapa/jenkins-shared-lib
+//
+// Tag-push builds (Multibranch Pipeline recommended):
+//   Branch Sources → GitHub → Behaviors:
+//     - Discover tags
+//   Build Strategies:
+//     - Tags (build tags discovered from the repository)
+//   GitHub webhook (push events) must reach Jenkins so tag creates/builds run.
+//   Tag naming for FWVER check: v<digits> only (e.g. v35 → FWVER must be 35).
 
 @Library('homin-jenkins-shared-lib') _
 
@@ -26,6 +39,12 @@ pipeline {
         timeout(time: 2, unit: 'HOURS')
         disableConcurrentBuilds()
         ansiColor('xterm')
+    }
+
+    // githubPush() lets the GitHub plugin wake Multibranch / Pipeline jobs on
+    // webhook push events (including tags when Discover tags is enabled).
+    triggers {
+        githubPush()
     }
 
     parameters {
@@ -77,6 +96,7 @@ pipeline {
                 checkout scm
                 script {
                     espRsResolveFwVer()
+                    validateTagMatchesFwver()
 
                     def hwRevs = []
                     if (params.HW_REV_3) { hwRevs << '3' }
@@ -196,4 +216,43 @@ pipeline {
             echo 'OTA pipeline failed. Check console logs.'
         }
     }
+}
+
+/**
+ * When this build is from a release tag like v35, require FWVER == "35".
+ * Non-matching tags (e.g. v0.4.25) and non-tag builds skip this check.
+ */
+def validateTagMatchesFwver(String fwverFile = 'FWVER') {
+    def tagName = env.TAG_NAME?.toString()?.trim()
+    if (!tagName) {
+        // Multibranch tag builds set TAG_NAME; fall back to exact tag at HEAD
+        // so classic Pipeline checkouts of a tag still validate.
+        tagName = sh(
+            script: 'git describe --exact-match --tags HEAD 2>/dev/null || true',
+            returnStdout: true
+        ).trim()
+    }
+    if (!tagName) {
+        echo 'No git tag on this build; skipping FWVER ↔ tag check.'
+        return
+    }
+
+    if (!(tagName ==~ /^v\d+$/)) {
+        echo "Git tag '${tagName}' is not v<digits>; skipping FWVER ↔ tag check."
+        return
+    }
+    def tagVer = tagName.substring(1)
+
+    if (!fileExists(fwverFile)) {
+        error("Git tag '${tagName}' requires ${fwverFile}=${tagVer}, but ${fwverFile} is missing.")
+    }
+    def fwver = readFile(fwverFile).trim()
+    if (fwver != tagVer) {
+        error(
+            "Git tag '${tagName}' expects ${fwverFile}=${tagVer}, " +
+            "but ${fwverFile} contains '${fwver}'. " +
+            "Update ${fwverFile} to ${tagVer} (or retag) before releasing."
+        )
+    }
+    echo "Git tag '${tagName}' matches ${fwverFile}=${fwver}."
 }
