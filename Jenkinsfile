@@ -19,7 +19,8 @@
 @Library('homin-jenkins-shared-lib') _
 
 pipeline {
-    agent any
+    // agent any
+    agent { label 'esp-rs'}
 
     options {
         timeout(time: 2, unit: 'HOURS')
