@@ -3,28 +3,24 @@ export RUSTY_HANGULCLOCK_SW_VERSION=
 export RUSTY_HANGULCLOCK_HW_REVISION=4
 export RUSTY_HANGULCLOCK_TOKEN=
 
-.PHONY: flash_dotstar flash build ota_bin erase_nvs clippy fmt audit deny check-all
-
-flash_dotstar:
-	. ~/export-esp.sh
-	cargo espflash flash --no-default-features --features dotstar,tr_to_left --release --partition-table part.csv -M
+.PHONY: flash build ota_bin erase_nvs clippy fmt audit deny check-all
 
 flash:
 	. ~/export-esp.sh
-	cargo espflash flash --no-default-features --features neopixel,tr_to_left --release --partition-table part.csv -M
+	cargo espflash flash --no-default-features --features tr_to_left --release --partition-table part.csv -M
 
 # Force flash to specific OTA partition
 flash_ota0:
 	. ~/export-esp.sh
-	cargo espflash flash --no-default-features --features neopixel,tr_to_left --release --partition-table part.csv --partition-table-offset 0xd000 --target-app-partition ota_0 -M
+	cargo espflash flash --no-default-features --features tr_to_left --release --partition-table part.csv --partition-table-offset 0xd000 --target-app-partition ota_0 -M
 
 flash_ota1:
 	. ~/export-esp.sh
-	cargo espflash flash --no-default-features --features neopixel,tr_to_left --release --partition-table part.csv --partition-table-offset 0xd000 --target-app-partition ota_1 -M
+	cargo espflash flash --no-default-features --features tr_to_left --release --partition-table part.csv --partition-table-offset 0xd000 --target-app-partition ota_1 -M
 
 build:
 	. ~/export-esp.sh
-	cargo build --no-default-features --features neopixel,tr_to_left --release
+	cargo build --no-default-features --features tr_to_left --release
 
 ota_bin: build
 	mkdir -p release

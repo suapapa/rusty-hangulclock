@@ -1,39 +1,24 @@
 use std::sync::{Arc, Mutex};
 
-#[cfg(feature = "dotstar")]
-use apa102_spi::Apa102;
 use embedded_hal::spi::SpiBus;
 use esp_idf_svc::hal::interrupt;
 use log::{info, warn};
 use smart_leds::hsv::{hsv2rgb, Hsv};
 use smart_leds::{gamma, SmartLedsWrite, RGB8};
-#[cfg(feature = "neopixel")]
 use ws2812_spi::Ws2812;
 
 use crate::{global, net, nvs};
 
 pub const LED_NUM: usize = 25;
 
-#[cfg(feature = "dotstar")]
-pub struct Sleds<SPI> {
-    sleds: Arc<Mutex<Apa102<SPI>>>,
-}
-
-#[cfg(feature = "neopixel")]
 pub struct Sleds<SPI> {
     sleds: Arc<Mutex<Ws2812<SPI>>>,
 }
 
 impl<SPI: SpiBus> Sleds<SPI> {
     pub fn new(spi_bus: SPI) -> Self {
-        #[cfg(feature = "dotstar")]
-        let sleds = Apa102::new(spi_bus);
-
-        #[cfg(feature = "neopixel")]
-        let sleds = Ws2812::new(spi_bus);
-
         Self {
-            sleds: Arc::new(Mutex::new(sleds)),
+            sleds: Arc::new(Mutex::new(Ws2812::new(spi_bus))),
         }
     }
 

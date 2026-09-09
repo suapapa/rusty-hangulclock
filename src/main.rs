@@ -9,8 +9,6 @@ mod rotary;
 mod timer;
 mod web_server;
 
-#[cfg(feature = "dotstar")]
-use apa102_spi::MODE as SPI_MODE;
 use chrono::prelude::*;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::gpio::*;
@@ -26,7 +24,6 @@ use esp_idf_svc::wifi::{AsyncWifi, EspWifi};
 use log::{debug, info, warn};
 use sh1106::prelude::GraphicsMode as Sh1106GM;
 use sh1106::Builder as Sh1106Builder;
-#[cfg(feature = "neopixel")]
 use ws2812_spi::MODE as SPI_MODE;
 
 fn main() -> anyhow::Result<()> {
