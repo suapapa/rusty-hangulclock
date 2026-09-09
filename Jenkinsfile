@@ -55,7 +55,8 @@ pipeline {
 
         // rustup install is not on non-login shell PATH by default
         PATH = "${HOME}/.cargo/bin:${env.PATH}"
-        RUSTC_WRAPPER = 'sccache'
+        // temporary fix for error: failed to run custom build command for `esp-idf-sys v0.37.2`
+        // RUSTC_WRAPPER = 'sccache'
         SCCACHE_DIR = "${WORKSPACE}/.sccache"
         CARGO_TERM_COLOR = 'always'
         HOMIN_DEV_TOKEN = credentials('HOMIN_DEV_TOKEN')
