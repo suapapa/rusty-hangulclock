@@ -56,6 +56,7 @@ pipeline {
         RUSTC_WRAPPER = 'sccache'
         SCCACHE_DIR = "${WORKSPACE}/.sccache"
         CARGO_TERM_COLOR = 'always'
+        HOMIN_DEV_TOKEN = credentials('HOMIN_DEV_TOKEN')
     }
 
     stages {
