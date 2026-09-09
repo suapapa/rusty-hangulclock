@@ -53,6 +53,8 @@ pipeline {
         DOWNLOAD_URL_BASE = 'https://asset.homin.dev/rusty-hangulclock_fw/'
         OTA_BIN_PREFIX = 'rusty-hangulclock'
 
+        // rustup install is not on non-login shell PATH by default
+        PATH = "${HOME}/.cargo/bin:${env.PATH}"
         RUSTC_WRAPPER = 'sccache'
         SCCACHE_DIR = "${WORKSPACE}/.sccache"
         CARGO_TERM_COLOR = 'always'
@@ -72,7 +74,7 @@ pipeline {
         stage('Pre-flight') {
             steps {
                 sh '''
-                    set -eu pipefail
+                    set -eu
                     echo "=== Toolchain Verification ==="
                     cargo --version
                     rustc --version
@@ -89,7 +91,7 @@ pipeline {
         stage('Build OTA bins') {
             steps {
                 sh '''
-                    set -eu pipefail
+                    set -eu
                     if [ -f "${HOME}/export-esp.sh" ]; then
                         # shellcheck disable=SC1090
                         source "${HOME}/export-esp.sh"
