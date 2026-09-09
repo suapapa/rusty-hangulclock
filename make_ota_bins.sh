@@ -6,7 +6,7 @@
 SW_VERSION="" # 33
 TARGET="ota_bin"
 
-while getopts "n:r:v:a:o:" opt; do
+while getopts "v:" opt; do
   case $opt in
     v) SW_VERSION="$OPTARG" ;;
     \?) echo "Usage: $0 [-v SW_VERSION]"; exit 1 ;;

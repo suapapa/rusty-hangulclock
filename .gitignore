@@ -30,7 +30,7 @@ node_modules/
 # OS specific
 # Task files
 tasks.json
-tasks/ 
+tasks/
 
 *.stl
 *.bak
@@ -41,3 +41,5 @@ release/
 
 .agents/
 skills-lock.json
+
+.history/
