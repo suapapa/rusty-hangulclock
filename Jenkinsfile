@@ -73,15 +73,23 @@ pipeline {
 
         stage('Pre-flight') {
             steps {
-                sh '''
-                    set -eu
+                // Shebang required: Jenkins defaults to /bin/sh (dash), not bash.
+                sh '''#!/bin/bash
+                    set -euo pipefail
                     echo "=== Toolchain Verification ==="
                     cargo --version
                     rustc --version
                     command -v cargo-espflash
-                    command -v sccache && sccache --version || echo "WARN: sccache not found"
+                    if command -v sccache >/dev/null 2>&1; then
+                        sccache --version
+                    else
+                        echo "WARN: sccache not found"
+                    fi
                     git --version
-                    test -n "${HOMIN_DEV_TOKEN:-}" || { echo "ERROR: HOMIN_DEV_TOKEN is not set"; exit 1; }
+                    if [ -z "${HOMIN_DEV_TOKEN:-}" ]; then
+                        echo "ERROR: HOMIN_DEV_TOKEN is not set"
+                        exit 1
+                    fi
                     mkdir -p release
                     sccache --zero-stats || true
                 '''
@@ -90,11 +98,13 @@ pipeline {
 
         stage('Build OTA bins') {
             steps {
-                sh '''
-                    set -eu
+                // Shebang required: Jenkins defaults to /bin/sh (dash), not bash.
+                sh '''#!/bin/bash
+                    set -euo pipefail
                     if [ -f "${HOME}/export-esp.sh" ]; then
                         # shellcheck disable=SC1090
-                        source "${HOME}/export-esp.sh"
+                        # Prefer `.` over `source` (works in bash and POSIX sh)
+                        . "${HOME}/export-esp.sh"
                     fi
                     chmod +x ./make_ota_bins.sh
                     ./make_ota_bins.sh -v "${SW_VERSION}"
