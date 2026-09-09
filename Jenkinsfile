@@ -13,9 +13,10 @@
 //
 // Jenkins setup:
 //   Manage Jenkins → System → Global Pipeline Libraries
-//     Name: jenkins-shared-lib  (must match @Library below)
+//     Name: homin-jenkins-shared-lib  (must match @Library below)
+//     Source: https://github.com/suapapa/jenkins-shared-lib
 
-@Library('jenkins-shared-lib') _
+@Library('homin-jenkins-shared-lib') _
 
 pipeline {
     agent any
