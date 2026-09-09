@@ -37,7 +37,10 @@ tasks/
 *.cursor
 *.env.example
 ref/
-release/
+# OTA binaries live under release/; keep helper scripts tracked
+release/*
+!release/deploy.sh
+!release/upload_update.sh
 
 .agents/
 skills-lock.json
