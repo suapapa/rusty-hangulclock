@@ -1,10 +1,14 @@
 #!/bin/bash
 
 # Defaults
-# NO=26
-# HW_REVISION=4
-SW_VERSION="" # 33
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SW_VERSION=""
+HW_REVISIONS="3 4"
 TARGET="ota_bin"
+
+if [ -f "${SCRIPT_DIR}/FWVER" ]; then
+  SW_VERSION="$(tr -d '[:space:]' < "${SCRIPT_DIR}/FWVER")"
+fi
 
 while getopts "v:" opt; do
   case $opt in
@@ -14,14 +18,14 @@ while getopts "v:" opt; do
 done
 
 if [ -z "$SW_VERSION" ]; then
-  echo "Error: -v option is required"
+  echo "Error: SW_VERSION is empty (set FWVER or pass -v)"
   exit 1
 fi
 
 export SW_VERSION
 
-for rev in 3 4; do
-  echo "Building for HW Revision $rev..."
+for rev in ${HW_REVISIONS}; do
+  echo "Building for HW Revision $rev (SW_VERSION=${SW_VERSION})..."
   make ${TARGET} \
     RUSTY_HANGULCLOCK_TOKEN=${HOMIN_DEV_TOKEN} \
     RUSTY_HANGULCLOCK_HW_REVISION=$rev \
