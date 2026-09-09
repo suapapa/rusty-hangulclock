@@ -72,7 +72,7 @@ pipeline {
         stage('Pre-flight') {
             steps {
                 sh '''
-                    set -euo pipefail
+                    set -eu pipefail
                     echo "=== Toolchain Verification ==="
                     cargo --version
                     rustc --version
@@ -89,7 +89,7 @@ pipeline {
         stage('Build OTA bins') {
             steps {
                 sh '''
-                    set -euo pipefail
+                    set -eu pipefail
                     if [ -f "${HOME}/export-esp.sh" ]; then
                         # shellcheck disable=SC1090
                         source "${HOME}/export-esp.sh"
