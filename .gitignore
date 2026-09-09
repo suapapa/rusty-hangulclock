@@ -5,7 +5,7 @@
 .DS_Store
 gerber/
 *.zip
-Makefile
+# Makefile
 
 # Added by Claude Task Master
 # Logs
