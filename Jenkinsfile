@@ -172,7 +172,8 @@ pipeline {
                         assetRepo: env.ASSET_REPO,
                         assetSubdir: env.ASSET_SUBDIR,
                         version: env.SW_VERSION,
-                        sourceDir: 'release'
+                        sourceDir: 'release',
+                        keepCount: 6 // 최종 (두개의 하드웨어 리비젼의) 3개 버전의 아티팩트들만 남김
                     )
                 }
             }
